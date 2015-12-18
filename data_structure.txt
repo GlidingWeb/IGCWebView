@@ -1,34 +1,24 @@
-Database structure for jsigc rbworld branch:
+Database structure for  branch:
 
-Table polyref    //master table for polygons:
+Table geopoly    //master table for polygons:
 Fields:
 polynum:   integer  (3 byte) autoincrement primary key
 country:   char(2)  //2 character country code- same as used for internet domains
 name: varchar(30)  //identifying name of the airspace.  Not used by the application but useful to keep track
-northlim:  double  //most northerly point of the polygon
-southlim:  double  //most southerly point of the polygon
-eastlim:  double  //most easterly point of the polygon
-westlim:  double  //most westerly point of the polygon
 base:  integer  unsigned (2 byte) //base of airspace in feet (assumes equivalence of feet and flight level)
+outline: linestring   // must be closed; spatial index on this field
 
-Table polypoints  //actual points of the polygon
-Fields:
-polygon:  integer (3 byte)  //Foreign key linked on polyref(polynum). Joint index with point as primary key
-point: integer (single byte) //point sequence for drawing polygon.  Joint index with polygon as primary key
-coords: varchar(22)  //coordinates of the point already in string format: "[xx.xxxxx,xxx.xxxxx]".  Five decimal places
-
-Table circles:
+Table geocircle:
 Fields:
 circlenum:  integer  (3 byte) autoincrement primary key
 country:   char(2)  //2 character country code- same as used for internet domains
 name: varchar(30)  //identifying name of the airspace.  Not used by the application but useful to keep track
-northlim:  double  //most northerly point of the circle
-southlim:  double  //most southerly point of the circle
-eastlim:  double  //most easterly point of the circle
-westlim:  double  //most westerly point of the  circle
 base:  integer  unsigned (2 byte) //base of airspace in feet (assumes equivalence of feet and flight level)
-centre: varchar(22)  //coordinates of the centre already in string format: "[xx.xxxxx,xxx.xxxxx]".  Five decimal places
+centre: point
 radius: double //radius of the circle in nautical miles
+mbr: linestring: minimum bounding rectangle of the circle.  Spatial index
+
+Note: all coordinates are rounded to five decimal places before entry to the database.
 
 Table countries:
 country:   char(2)  //2 character country code- same as used for internet domains. Primary key
