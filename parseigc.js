@@ -194,12 +194,10 @@ function parseIGC(igcFile) {
     });
 
     var flightDate = extractDate(igcFile);
-    var taskpoints = [];
     var lineIndex;
     var positionData;
     var recordType;
     var currentLine;
-    var turnpoint; // for task declaration lines
     var headerData;
 
     for (lineIndex = 0; lineIndex < igcLines.length; lineIndex++) {

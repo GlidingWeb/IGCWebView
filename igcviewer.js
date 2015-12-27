@@ -1,3 +1,5 @@
+/* global L */
+/* global jQuery */
 (function ($) {
     'use strict';
 
@@ -10,8 +12,7 @@
         offset: 0,
         dst: false
     };
-    var flightarea = null;
-
+    
     var task = null;
 
     function showTask() {
@@ -382,7 +383,6 @@
         var headerBlock = $('#headers');
         headerBlock.html('');
         //Delay display of date till we get the timezone
-        var headerName;
         var headerIndex;
         for (headerIndex = 0; headerIndex < igcFile.headers.length; headerIndex++) {
             headerBlock.append(
@@ -532,12 +532,12 @@
             }
         });
 
-        var altitudeUnit = '', airspaceClip = '';
+        var storedAltitudeUnit = '', airspaceClip = '';
         if (window.localStorage) {
             try {
-                altitudeUnit = localStorage.getItem("altitudeUnit");
-                if (altitudeUnit) {
-                    $('#altitudeUnits').val(altitudeUnit).trigger('change', true);
+                storedAltitudeUnit = localStorage.getItem("altitudeUnit");
+                if (storedAltitudeUnit) {
+                    $('#altitudeUnits').val(storedAltitudeUnit).trigger('change', true);
                 }
 
                 airspaceClip = localStorage.getItem("airspaceClip");
