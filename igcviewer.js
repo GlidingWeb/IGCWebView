@@ -404,10 +404,6 @@
         $('#timeSlider').prop('max', igcFile.recordTime.length - 1);
     }
 
-    function pad(n) {
-        return (n < 10) ? ("0" + n) : n;
-    }
-
     function storePreference(name, value) {
         if (window.localStorage) {
             try {
