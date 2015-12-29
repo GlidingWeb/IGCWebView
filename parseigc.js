@@ -42,12 +42,12 @@ function parseIGC(igcFile) {
             manufacturer: 'Unknown',
             serial: aRecord.substring(4, 7)
         };
-        
+
         var manufacturerCode = aRecord.substring(1, 4);
         if (manufacturers[manufacturerCode]) {
             manufacturerInfo.manufacturer = manufacturers[manufacturerCode];
         }
-        
+
         return manufacturerInfo;
     }
 
@@ -124,8 +124,8 @@ function parseIGC(igcFile) {
 
         return [latitude, longitude];
     }
-    
-    function parsePosition(positionRecord,  model, flightDate) {
+
+    function parsePosition(positionRecord, model, flightDate) {
         // Regex to match position records:
         // Hours, minutes, seconds, latitude, N or S, longitude, E or W,
         // Fix validity ('A' = 3D fix, 'V' = 2D or no fix),
@@ -181,25 +181,23 @@ function parseIGC(igcFile) {
     if (!(/^A[\w]{6}/).test(igcLines[0])) {
         throw new IGCException(invalidFileMessage);
     }
-    
+
     var manufacturerInfo = parseManufacturer(igcLines[0]);
     model.headers.push({
         name: 'Logger manufacturer',
-        value: manufacturerInfo.manufacturer 
+        value: manufacturerInfo.manufacturer
     });
-    
+
     model.headers.push({
         name: 'Logger serial number',
         value: manufacturerInfo.serial
     });
 
     var flightDate = extractDate(igcFile);
-    var taskpoints= [];
     var lineIndex;
     var positionData;
     var recordType;
     var currentLine;
-    var turnpoint; // for task declaration lines
     var headerData;
 
     for (lineIndex = 0; lineIndex < igcLines.length; lineIndex++) {
@@ -218,10 +216,10 @@ function parseIGC(igcFile) {
 
             case 'C': // Task declaration
                 var taskRegex = /^C[\d]{7}[NS][\d]{8}[EW].*/;
-               if( taskRegex.test(currentLine)) {
-                   //drop the "C" and push raw data to model.  Will parse later if needed using same functions as for user entered tasks
-                   model.taskpoints.push(currentLine.substring(1).trim());
-                    }
+                if (taskRegex.test(currentLine)) {
+                    //drop the "C" and push raw data to model.  Will parse later if needed using same functions as for user entered tasks
+                    model.taskpoints.push(currentLine.substring(1).trim());
+                }
                 break;
 
             case 'H': // Header information
