@@ -15,6 +15,157 @@
     
     var task = null;
 
+       // new stuff
+    
+    function topoint(start, end) {
+    var earthrad = 6378; // km
+    var lat1 = start['lat'] * Math.PI / 180;
+    var lat2 = end['lat'] * Math.PI / 180;
+    var lon1 = start['lng'] * Math.PI / 180;
+    var lon2 = end['lng'] * Math.PI / 180;
+    var deltaLat = lat2 - lat1;
+    var deltaLon = (end['lng'] - start['lng']) * Math.PI / 180;
+    var a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    var d = earthrad * c;
+    var y = Math.sin(lon2 - lon1) * Math.cos(lat2);
+    var x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+    var brng = (360 + Math.atan2(y, x) * 180 / Math.PI) % 360;
+    return {
+      distance: d,
+      bearing: brng
+    };
+ }
+    
+   
+    
+   function getSectorDefs() {
+       var startrad=5;  //start line radius
+       var finrad= 1; //finish line radius
+       var tprad= 0.5;  //'beer can' radius
+       var sector_rad= 15; //tp sector radius
+       var sector_angle= 90;  //tp sector
+       var i;
+       var heading;
+       var legheadings=[];
+       var sectors=[];
+       var bisector;
+       var reciprocal;
+       for(i=1;i < task.coords.length; i++) {
+               heading= topoint(task.coords[i-1],task.coords[i]).bearing;
+             legheadings.push(heading);
+       }
+      for(i=0; i < task.coords.length; i++) {
+          var sectordef={};
+           switch(i) {
+               case 0:   //start line
+                   sectordef.radius=startrad;
+                   sectordef.minbearing=legheadings[0]+90;
+                   sectordef.maxbearing=legheadings[0]-90;
+                   sectordef.barrel=0;
+                   break;
+               case task.coords.length-1:   //finish line
+                   sectordef.radius= finrad;
+                   sectordef.maxbearing=legheadings[i-1]+90;
+                   sectordef.minbearing= legheadings[i-1] -90;
+                  sectordef.barrel=0;
+                   break;
+               default:
+                   sectordef.barrel=tprad;
+                   sectordef.radius= sector_rad;
+                    reciprocal=(legheadings[i-1] + 180)%360;
+                    bisector =(reciprocal + legheadings[i])/2;
+                     if (Math.abs(legheadings[i] - reciprocal) < 180) {
+                              bisector = (bisector + 180) % 360;
+                   }
+                   sectordef.maxbearing=bisector +45;
+                   sectordef.minbearing= bisector -45;
+           }
+           sectordef.maxbearing=(sectordef.maxbearing +360) % 360;
+            sectordef.minbearing=(sectordef.minbearing +360) % 360;
+             sectors[i]=sectordef;
+    }
+   return sectors;
+   }
+    
+    function checksector(coords, point,sector) {
+        var startpt= {
+             lat: coords[0],
+             lng: coords[1]
+        };
+        var posdata= topoint(task.coords[point],startpt);
+        var maxbearing= sector.maxbearing;
+        if(maxbearing < sector.minbearing)  {
+            maxbearing +=360;
+        } 
+        if((posdata.distance < sector.barrel) || ((posdata.distance < sector.radius) && (posdata.bearing < maxbearing) && (posdata.bearing > sector.minbearing)))  {
+           return true;
+       }
+        else {
+           return false;
+      }
+    }
+    
+        function getPosInfo(recordTime, altitude) {
+        var adjustedTime=new Date(recordTime + timezone.offset);
+        var showTime=adjustedTime.getUTCHours() + ':' + pad(adjustedTime.getUTCMinutes()) + ':' + pad(adjustedTime.getSeconds());
+        return showTime + ":  Altitude: " + (altitude* altitudeConversionFactor).toFixed(0) + " " + $('#altitudeUnits').val();
+    }
+    
+       function analyseTask() {
+         var insector;
+        var i=0;
+        var curLeg=0;
+        var sectors= getSectorDefs();
+         var fileover = igcFile.latLong.length;
+        //var fileover=3000;
+        var startTime;
+        var appendLine;
+        var tpindices=[];
+        var instart;
+        var legName;
+        //read through file until in start sector
+       do  {
+            insector=checksector(igcFile.latLong[i],0,sectors[0]);
+              i++;
+        } 
+        while((i < fileover) && (insector===false));
+         do {
+              if(curLeg < 2) {
+                  instart=checksector(igcFile.latLong[i],0,sectors[0]);
+                 if(curLeg===1) {
+                      if(instart) {
+                          curLeg=0;
+                      }
+                  }
+                  else {
+                      if(!(instart))  {
+                          tpindices[0]=i;
+                          startTime=igcFile.recordTime[i].getTime();
+                           $('#startmsg').text("Started: " + getPosInfo(startTime,igcFile.pressureAltitude[i]));
+                           curLeg=1;
+                           }
+                  }
+              }
+              if(curLeg > 0) {
+              if (checksector(igcFile.latLong[i],curLeg,sectors[curLeg])) {
+                           tpindices[curLeg]=i;
+                           if(curLeg===(task.coords.length-1)) {
+                                 legName="Finish";
+                           }
+                           else {
+                               legName= "TP" + curLeg;
+                           }
+                           $('#startmsg').append("<br>" +legName +": " + getPosInfo(igcFile.recordTime[i].getTime(),igcFile.pressureAltitude[i]) );
+                            curLeg++;
+                    }
+              }
+           i++;
+         }
+        while ((i  < fileover) && (curLeg < task.coords.length));
+       }
+    //end of new stuff
+    
     function showTask() {
         var i;
         var pointlabel;
@@ -531,7 +682,16 @@
                 $('#timeSlider').val(item.dataIndex);
             }
         });
-
+     
+        $('#analyse').click(function() {
+            $('#taskdata').show();
+            analyseTask();
+        });
+        
+        $('#closewindow').click(function() {
+            $('#taskdata').hide();
+        });
+        
         var storedAltitudeUnit = '', airspaceClip = '';
         if (window.localStorage) {
             try {

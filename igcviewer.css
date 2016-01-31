@@ -167,6 +167,29 @@ display: none;
    margin-bottom: 20px;
 }
 
+#taskdata  {
+  display: none;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 60%;
+  height: 350px;
+  padding: 15px;
+    margin: auto;
+   border-style: solid;
+   border-width: 2px;
+   overflow: auto;
+z-index: 2000;
+background-color: white;
+}
+
+#closewindow {
+position: absolute;
+top: 300px;
+}
+
 @-ms-viewport  {
     width: extend-to-zoom;
     zoom: 1.0;
