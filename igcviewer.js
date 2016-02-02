@@ -18,13 +18,34 @@
        // new stuff
     
     function topoint(start, end) {
+  // alert("topoint start");
     var earthrad = 6378; // km
-    var lat1 = start['lat'] * Math.PI / 180;
-    var lat2 = end['lat'] * Math.PI / 180;
-    var lon1 = start['lng'] * Math.PI / 180;
-    var lon2 = end['lng'] * Math.PI / 180;
+    var degLat1;
+    var degLng1;
+    var degLat2;
+    var degLng2;
+    if(start.hasOwnProperty("lat")) {
+          degLat1=start.lat;
+          degLng1=start.lng;
+    }
+    else {
+        degLat1=start[0];
+        degLng1=start[1];
+    }
+    if(end.hasOwnProperty("lat")) {
+          degLat2=end.lat;
+          degLng2=end.lng;
+    }
+    else {
+        degLat2=end[0];
+        degLng2=end[1];
+    }
+    var lat1 = degLat1 * Math.PI / 180;
+    var lat2 = degLat2 * Math.PI / 180;
+    var lon1 = degLng1 * Math.PI / 180;
+    var lon2 = degLng2 * Math.PI / 180;
     var deltaLat = lat2 - lat1;
-    var deltaLon = (end['lng'] - start['lng']) * Math.PI / 180;
+    var deltaLon=lon2 - lon1;
     var a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
     var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     var d = earthrad * c;
@@ -89,21 +110,22 @@
    }
     
     function checksector(coords, point,sector) {
-        var startpt= {
-             lat: coords[0],
-             lng: coords[1]
-        };
-        var posdata= topoint(task.coords[point],startpt);
+        var posdata= topoint(task.coords[point],coords);
         var maxbearing= sector.maxbearing;
+        var insector;
         if(maxbearing < sector.minbearing)  {
             maxbearing +=360;
         } 
         if((posdata.distance < sector.barrel) || ((posdata.distance < sector.radius) && (posdata.bearing < maxbearing) && (posdata.bearing > sector.minbearing)))  {
-           return true;
+          insector= true;
        }
         else {
-           return false;
+           insector=false;
       }
+      return {
+          inZone: insector,
+        distanceFrom: posdata.distance
+      };
     }
     
         function getPosInfo(recordTime, altitude) {
@@ -112,58 +134,147 @@
         return showTime + ":  Altitude: " + (altitude* altitudeConversionFactor).toFixed(0) + " " + $('#altitudeUnits').val();
     }
     
-       function analyseTask() {
+    function toTimeString(interval, showsecs) { 
+        var totalSeconds= interval/1000;
+        var secondsPart= Math.round(totalSeconds%60);
+        var totalMinutes=Math.floor(totalSeconds/60);
+        var minutesPart=totalMinutes%60;
+        var hoursPart= Math.floor(totalMinutes/60);
+        var retval=hoursPart + "hrs "+ minutesPart + "mins ";
+        if(showsecs) {
+            retval += secondsPart + "secs";
+        }
+        return retval;
+    }
+    
+    function analyseTask(mapControl) {
          var insector;
-        var i=0;
-        var curLeg=0;
+        var i=1;
+        var curLeg=-1;  //no entry to start sector recorded
         var sectors= getSectorDefs();
          var fileover = igcFile.latLong.length;
-        //var fileover=3000;
         var startTime;
-        var appendLine;
+        var startAlt;
+        var finishTime;
+        var finishAlt;
         var tpindices=[];
-        var instart;
         var legName;
-        //read through file until in start sector
-       do  {
-            insector=checksector(igcFile.latLong[i],0,sectors[0]);
-              i++;
-        } 
-        while((i < fileover) && (insector===false));
+        var distInterval={};
+        var groundspeed;
+        var flying=false;
+        var takeoffTime;
+        var timestamp;
+        var tpAlt;
+        var j;
+        var bestSoFar=0;
+        var totalToNext=0;
+        var sectorcheck={};
+        var bestIndex;
+        var startIndexLatest;
+        var currentDistance;
          do {
+                if(!(flying)) {
+               distInterval=topoint(igcFile.latLong[i-1],igcFile.latLong[i]);
+               groundspeed=3600000*distInterval.distance/(igcFile.recordTime[i].getTime()-igcFile.recordTime[i-1].getTime());
+              if(groundspeed > 20) {
+                     flying=true;
+                     takeoffTime=igcFile.recordTime[i].getTime();
+                     var takeOffDate=new Date(takeoffTime + timezone.offset);
+                     $('#taskcalcs').text("Take off: " + takeOffDate.getUTCHours() + ':' + pad(takeOffDate.getUTCMinutes()));
+               }
+                       }
               if(curLeg < 2) {
-                  instart=checksector(igcFile.latLong[i],0,sectors[0]);
-                 if(curLeg===1) {
-                      if(instart) {
+                  sectorcheck=checksector(igcFile.latLong[i],0,sectors[0]);
+                 if((curLeg===1) || (curLeg===-1)) {
+                      if(sectorcheck.inZone) {
                           curLeg=0;
                       }
                   }
                   else {
-                      if(!(instart))  {
+                      if(!(sectorcheck.inZone))  {
                           tpindices[0]=i;
-                          startTime=igcFile.recordTime[i].getTime();
-                           $('#startmsg').text("Started: " + getPosInfo(startTime,igcFile.pressureAltitude[i]));
                            curLeg=1;
+                           totalToNext=task.legsize[1];
                            }
                   }
               }
-              if(curLeg > 0) {
-              if (checksector(igcFile.latLong[i],curLeg,sectors[curLeg])) {
+              if ((curLeg > 0) &&(curLeg < task.coords.length)) {
+                  sectorcheck=checksector(igcFile.latLong[i],curLeg,sectors[curLeg]);
+                  currentDistance=totalToNext-sectorcheck.distanceFrom;
+                 if(currentDistance  > bestSoFar) {
+                       bestSoFar= currentDistance;
+                       bestIndex=i;
+                       if(curLeg===1) {
+                          startIndexLatest=tpindices[0];    //last start before maximimum distance.  We stop checking for start after TP1
+                       }
+                    }
+              if (sectorcheck.inZone) {
                            tpindices[curLeg]=i;
-                           if(curLeg===(task.coords.length-1)) {
-                                 legName="Finish";
-                           }
-                           else {
-                               legName= "TP" + curLeg;
-                           }
-                           $('#startmsg').append("<br>" +legName +": " + getPosInfo(igcFile.recordTime[i].getTime(),igcFile.pressureAltitude[i]) );
                             curLeg++;
+                            totalToNext+= task.legsize[curLeg];
                     }
               }
            i++;
          }
         while ((i  < fileover) && (curLeg < task.coords.length));
+         i=fileover-1;
+        do {
+             distInterval=topoint(igcFile.latLong[i-1],igcFile.latLong[i]);
+            groundspeed=3600000*distInterval.distance/(igcFile.recordTime[i].getTime()-igcFile.recordTime[i-1].getTime());
+            i--;
+        }
+        while((groundspeed < 20) && (i>0));
+        var landingTime= igcFile.recordTime[i].getTime();
+         var landingDate=new Date(landingTime + timezone.offset);
+         if(curLeg===1) {
+             tpindices[0]=startIndexLatest;   //ensures that we record a sensible start time if landed on the first leg
+            }
+     for(j=0; j <  task.coords.length; j++) {
+                if(j < curLeg) {
+               tpAlt=igcFile.pressureAltitude[tpindices[j]];
+                 timestamp= igcFile.recordTime[tpindices[j]].getTime();
+                }
+                 switch(j) {
+                    case 0:
+                         legName="<br/><br/>Start: ";
+                         startTime=timestamp;
+                         startAlt=tpAlt;
+                         break;
+                    case task.coords.length - 1:
+                         legName= "<br/>Finish: ";
+                         finishTime=timestamp;
+                        finishAlt=tpAlt;
+                         break;
+                    default:
+                         legName= "<br/>TP" + j + ": ";
+                 }
+                 if(j < curLeg) {
+                      $('#taskcalcs').append(legName + getPosInfo(timestamp,tpAlt) );
+                 }
+                 else {
+                     $('#taskcalcs').append(legName +"No Control" );
+                 }
+             }
+         if(curLeg===task.coords.length) {  //task completed
+              $('#taskcalcs').append("<br/><br/>"+task.distance.toFixed(2) + " Km task completed");
+             $('#taskcalcs').append( "<br/>Elapsed time: " +toTimeString(finishTime-startTime,true) );
+             $('#taskcalcs').append( "<br/>Speed: " +(3600000*task.distance/(finishTime-startTime)).toFixed(2) + " km/hr" );
+             $('#taskcalcs').append( "<br/>Height loss: " + (altitudeConversionFactor* (startAlt-finishAlt)).toFixed(0) + " " +  $('#altitudeUnits').val()) ;
+             if(altitudeConversionFactor !==1) {
+                 $('#taskcalcs').append( " (" + (startAlt-finishAlt).toFixed(0) + "m)");
+             }
+         }
+         else {
+             var chickenDate=new Date(igcFile.recordTime[bestIndex].getTime() + timezone.offset);
+             $('#taskcalcs').append("<br/><br/>\"GPS Landing\" at: "  + chickenDate.getUTCHours() +":" +  pad(chickenDate.getUTCMinutes()));
+             mapControl.pushPin(igcFile.latLong[bestIndex]);
+             $('#taskcalcs').append("<br/>Position: " + pointDescription(L.latLng(igcFile.latLong[bestIndex])));
+             $('#taskcalcs').append("<br/>Scoring distance: " + bestSoFar.toFixed(2)  + " Km");
+         }
+         $('#taskcalcs').append("<br/><br/>Landing: " + landingDate.getUTCHours() + ':' + pad(landingDate.getUTCMinutes()));
+         $('#taskcalcs').append( "<br/>Flight time: " + toTimeString(landingTime-takeoffTime, false)) ;
        }
+       
     //end of new stuff
     
     function showTask() {
@@ -222,10 +333,12 @@
         var labels = [];
         var coords = [];
         var descriptions = [];
+        var legsize=[];
         names[0] = points.name[0];
         labels[0] = "Start";
         coords[0] = points.coords[0];
         descriptions[0] = pointDescription(points.coords[0]);
+        legsize[0]=0;
         for (i = 1; i < points.coords.length; i++) {
             leglength = points.coords[i].distanceTo(points.coords[i - 1]);
             //eliminate situation when two successive points are identical (produces a divide by zero error on display. 
@@ -235,6 +348,7 @@
                 coords[j] = points.coords[i];
                 descriptions[j] = pointDescription(points.coords[i]);
                 labels[j] = "TP" + j;
+                legsize[j]= leglength / 1000;
                 distance += leglength;
                 j++;
             }
@@ -246,6 +360,7 @@
             labels: labels,
             coords: coords,
             descriptions: descriptions,
+             legsize: legsize,
             distance: distance
         };
         //Must be at least two points more than 30 metres apart
@@ -684,8 +799,9 @@
         });
      
         $('#analyse').click(function() {
+            $('taskcalcs').text('');
             $('#taskdata').show();
-            analyseTask();
+            analyseTask(mapControl);
         });
         
         $('#closewindow').click(function() {
