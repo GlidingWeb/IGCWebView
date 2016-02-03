@@ -146,13 +146,14 @@ function parseIGC(igcFile) {
                 model.recordTime[0] > positionTime) {
                 positionTime.setDate(flightDate.getDate() + 1);
             }
-
-            return {
-                recordTime: positionTime,
-                latLong: parseLatLong(positionMatch[4]),
-                pressureAltitude: parseInt(positionMatch[6], 10),
-                gpsAltitude: parseInt(positionMatch[7], 10)
-            };
+             if(positionMatch[4] !=="0000000N00000000W") {
+               return {
+                  recordTime: positionTime,
+                  latLong: parseLatLong(positionMatch[4]),
+                  pressureAltitude: parseInt(positionMatch[6], 10),
+                  gpsAltitude: parseInt(positionMatch[7], 10)
+               };
+             }
         }
     }
     
