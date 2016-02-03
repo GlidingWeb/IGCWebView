@@ -15,10 +15,9 @@
     
     var task = null;
 
-       // new stuff
+    // new stuff
     
     function topoint(start, end) {
-  // alert("topoint start");
     var earthrad = 6378; // km
     var degLat1;
     var degLng1;
@@ -182,7 +181,7 @@
                      var takeOffDate=new Date(takeoffTime + timezone.offset);
                      $('#taskcalcs').text("Take off: " + takeOffDate.getUTCHours() + ':' + pad(takeOffDate.getUTCMinutes()));
                }
-                       }
+            }
               if(curLeg < 2) {
                   sectorcheck=checksector(igcFile.latLong[i],0,sectors[0]);
                  if((curLeg===1) || (curLeg===-1)) {
@@ -229,9 +228,22 @@
          if(curLeg===1) {
              tpindices[0]=startIndexLatest;   //ensures that we record a sensible start time if landed on the first leg
             }
+    var pressureCheck= igcFile.pressureAltitude.reduce(function(a, b) { return a + b; }, 0);  //total of pressure altitude records
+    if(pressureCheck===0) {
+        alert("Pressure altitude not available.  Using GPS");
+    }
+   if( (curLeg===0) && (bestSoFar > 0)) {   //if landed in the start zone before TP 1 but have started
+        tpindices[0]=startIndexLatest;   //take last point crossing line as a start
+        curLeg=1;   //and assume we are still on the first leg
+    }
      for(j=0; j <  task.coords.length; j++) {
                 if(j < curLeg) {
+                if(pressureCheck > 0)  {        //if total of pressure altitude records > 0
                tpAlt=igcFile.pressureAltitude[tpindices[j]];
+                 }
+                else {
+                     tpAlt=igcFile.gpsAltitude[tpindices[j]];
+                }
                  timestamp= igcFile.recordTime[tpindices[j]].getTime();
                 }
                  switch(j) {

@@ -205,6 +205,9 @@ function createMapControl(elementName) {
                 map.removeLayer(mapLayers.task);
                 layersControl.removeLayer(mapLayers.task);
             }
+            if(pin) {
+                map.removeLayer(pin);
+            }
         },
         
        addTask: function (coordinates, names) {
@@ -273,6 +276,9 @@ function createMapControl(elementName) {
     iconAnchor:   [0,50], // point of the icon which will correspond to marker's location
     popupAnchor:  [-3, -76] // point from which the popup should open relative to the iconAnchor
 });
+     if(pin) {
+                map.removeLayer(pin);
+            }
       pin= L.marker(L.latLng(coords),{icon:  pinIcon}).addTo(map);
         },
         
