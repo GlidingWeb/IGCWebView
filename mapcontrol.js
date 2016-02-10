@@ -210,7 +210,7 @@ function createMapControl(elementName) {
             }
         },
         
-       addTask: function (coordinates, names) {
+       addTask: function (coordinates, names,sectordefs) {
             var taskLayers = [L.polyline(coordinates, { color: 'dimgray' })];
             var lineDrawOptions = {
                 fillColor: 'green',
@@ -227,7 +227,7 @@ function createMapControl(elementName) {
             };
             //definitions from BGA rules
             //defined here as any future changes will be easier
-            var startLineRadius = 5;
+            //var startLineRadius = 5;
             var finishLineRadius = 1;
             var tpCircleRadius = 500;
             var tpSectorRadius = 20000;
@@ -237,17 +237,26 @@ function createMapControl(elementName) {
                taskLayers.push(L.marker(coordinates[j]).bindPopup(names[j]));
                 switch (j) {
                     case 0:
-                     var startline = getLine(coordinates[0], coordinates[1], startLineRadius, lineDrawOptions);
+                     var startline = getLine(coordinates[0], coordinates[1], sectordefs.startrad, lineDrawOptions);
                         taskLayers.push(startline);
                         break;
                     case (coordinates.length - 1):
-                      var finishline = getLine(coordinates[j], coordinates[j - 1], finishLineRadius, lineDrawOptions);
-                       taskLayers.push(finishline);
+                        if(sectordefs.finishtype==="line") {
+                          var finishline = getLine(coordinates[j], coordinates[j - 1],sectordefs.finrad, lineDrawOptions);
+                          taskLayers.push(finishline);
+                        }
+                        else {
+                            taskLayers.push(L.circle(coordinates[j], sectordefs.finrad*1000, sectorDrawOptions));
+                        }
                         break;
                        default:
-                       taskLayers.push(L.circle(coordinates[j], tpCircleRadius, sectorDrawOptions));
-                        var tpsector = getTpSector(coordinates[j], coordinates[j - 1], coordinates[j + 1], tpSectorRadius, tpSectorAngle,sectorDrawOptions);
+                        if(sectordefs.use_barrel) {
+                       taskLayers.push(L.circle(coordinates[j], sectordefs.tprad*1000, sectorDrawOptions));
+                        }
+                        if(sectordefs.use_sector) {
+                        var tpsector = getTpSector(coordinates[j], coordinates[j - 1], coordinates[j + 1], sectordefs.sector_rad*1000, sectordefs.sector_angle,sectorDrawOptions);
                        taskLayers.push(tpsector);
+                        }
                   }
               }
             mapLayers.task = L.layerGroup(taskLayers).addTo(map);

@@ -13,6 +13,12 @@ h1  {
 h2 {
     display: inline;
 }
+
+h3 {
+     text-align: center;
+     font-size: 1.2em;
+}
+
 #requestdata {
      line-height: 2.5em;
 }
@@ -186,7 +192,32 @@ display: none;
   background-color: white;
 }
 
+#sectors  {
+  display: none;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 18em;
+    height: 350px;
+    padding: 15px;
+    margin: auto;
+     border-style: solid;
+     border-width: 2px;
+     overflow: auto;
+     font-size: 0.9em;
+  z-index: 2000;
+  background-color: white;
+}
 
+#sectors input[type='text'] {
+   width: 3em;
+}
+
+#setsectors {
+float: right;
+}
 
 @-ms-viewport  {
     width: extend-to-zoom;
