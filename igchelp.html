@@ -62,6 +62,25 @@
             section is empty.
         </p>
 
+         <h2>Checking your performance</h2>
+        <p>
+            You can easily find out the speed you made around the task or how far short you were.  If you have both a task and an IGC file entered, click on the "Analyse task" button below the map.  If you completed the task it will show your speed; if you failed it will show your scoring distance (defined as the distance as far as the first failed turning point, minus the distance you were short of it).  A pin image will appear on the map marking your nearest approach to the failed point.
+        </p>
+        <p>
+        Start, finish, and turning point sectors used in the calculation are defined as shown on the map.  If you want to use something else, you can change these (see below).
+        </p>
+        
+         <h2>Control sectors</h2>
+        <p>
+           The defaults in the program are as follows:
+           <ul>
+           <li>Start:  A line radius 5 Km (ie: 10 Km long) centred at the start point, at right angle to the first leg.</li>
+           <li>Turning points: A circle 0.5 Km radius centred on the point, <b> plus</b> a sector 20 Km radius subtending an angle of 90&deg; remote from and centred on the bisector of the tracks in and out (the "FAI thistle").</li>
+           <li>Finish: A line of 1 Km radius at right angles to the last leg centred on the finish point.</li>
+           </ul>
+           If you want something else you can click on the "Configure TP sectors" button make changes, then click "Apply".  "Restore defaults" simply restores the values above, you still need to "apply" afterwards.  The values entered will always stick until you make a further change or close the page.  If you want them to apply next time you load the page, tick the "Save" box before "apply".
+        </p>
+        
         <h2>About IGCWebview</h2>
         <p>
             IGCWebview is an open source program. This means that the code is free for anyone to copy, modify and distribute, subject

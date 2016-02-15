@@ -225,13 +225,6 @@ function createMapControl(elementName) {
                 weight: 1,
                 opacity: 0.8
             };
-            //definitions from BGA rules
-            //defined here as any future changes will be easier
-            //var startLineRadius = 5;
-            var finishLineRadius = 1;
-            var tpCircleRadius = 500;
-            var tpSectorRadius = 20000;
-            var tpSectorAngle = 90;
             var j;
             for (j = 0; j < coordinates.length; j++) {
                taskLayers.push(L.marker(coordinates[j]).bindPopup(names[j]));
