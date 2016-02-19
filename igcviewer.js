@@ -1,8 +1,7 @@
 /* global L */
 /* global jQuery */
-(function($) {
+var ns=(function($) {
   'use strict';
-
   var igcFile = null;
   var barogramPlot = null;
   var altitudeConversionFactor = 3.2808399; // Conversion from metres to required units
@@ -14,7 +13,8 @@
   };
   var task = null;
   var sectordefs = {};
-
+  var mapControl;
+  
   function  showSectors() {
      $('#startrad').val( sectordefs.startrad);
     $('#finishrad').val(sectordefs.finrad);
@@ -385,7 +385,7 @@
       $('#task').show();
     }
     mapControl.addTask(task.coords, task.labels, sectordefs);
-      bindTaskButtons(mapControl);
+    bindTaskButtons(mapControl);
   }
 
   function pointDescription(coords) {
@@ -409,7 +409,7 @@
     mapControl.zapTask();
     $('#task').hide();
      $('#taskdata').hide();
-     task=null;
+    task = null;
   }
 
   //Get display information associated with task
@@ -693,8 +693,8 @@
       mapControl.showTP(task.coords[li]);
     });
   }
-  
-  function getFileTask(igcFile) {
+
+   function getFileTask(igcFile) {
       if (igcFile.taskpoints.length > 4) {
         var i;
         var pointdata;
@@ -719,9 +719,33 @@
      }
   }
   
+  function showImported(taskinfo) {
+      var tpoints={
+            name: [],
+            coords: []
+      }
+      var i;
+       $("#requestdata :input[type=text]").each(function() {
+        $(this).val("");
+      });
+      clearTask(mapControl);
+      for(i=0;i < taskinfo.tpname.length;i++) {
+        //  if(i===taskinfo.tpname.length-1) {
+           // $('#finish').val(taskinfo.tpname[i]);
+         // }
+       //   else {
+          //$("#requestdata :input[type=text]").eq(i).val(taskinfo.tpname[i]);
+       //   }
+        tpoints.name.push(taskinfo.tpname[i]);
+        tpoints.coords.push( L.latLng(taskinfo.lat[i],taskinfo.lng[i]));
+        }
+      task=maketask(tpoints);
+     showTask(mapControl);
+      $('#clearTask').show();
+      }
+  
   function displayIgc(mapControl) {
-      
-    clearTask(mapControl);
+ clearTask(mapControl);
     //check for user entered task- must be entry in start and finish
     if ($('#start').val().trim() && $('#finish').val().trim()) {
       parseUserTask();
@@ -770,16 +794,17 @@
   }
 
   $(document).ready(function() {
-    var mapControl = createMapControl('map');
+    mapControl = createMapControl('map');
+    var planWindow=null;
     var altitudeUnit = $('#altitudeUnits').val();
     if (altitudeUnit === 'feet') {
       altitudeConversionFactor = 3.2808399;
     } else {
       altitudeConversionFactor = 1.0;
     }
-
+    window.name="igcview";
     setSectorDefaults();
-    
+        
     $('#fileControl').change(function() {
       if (this.files.length > 0) {
         var reader = new FileReader();
@@ -848,11 +873,11 @@
     });
 
     $('#clearTask').click(function() {
-        $("#requestdata :input[type=text]").each(function() {
+      $("#requestdata :input[type=text]").each(function() {
         $(this).val("");
       });
       clearTask(mapControl);
-      if(igcFile) {
+        if(igcFile) {
       task=getFileTask(igcFile);
       }
       if(task) {
@@ -876,10 +901,10 @@
       });
 
     $('#enterTask').click(function() {
-     clearTask(mapControl);
+      clearTask(mapControl);
       parseUserTask();
       showTask(mapControl);
-     $('#clearTask').show();
+      $('#clearTask').show();
     });
 
     $('#barogram').on('plotclick', function(event, pos, item) {
@@ -890,6 +915,7 @@
     });
 
     $('#analyse').click(function() {
+       // checksects();
       $('#sectors').hide();
       $('taskcalcs').text('');
       $('#taskdata').show();
@@ -924,6 +950,13 @@
       showSectors();
     });
 
+    $('#loadext').click(function() {
+        if((!(planWindow)) || (planWindow.closed)) {
+         planWindow=window.open("../XCWebPlan/xcplan.php?version=world","_blank");
+        }
+       planWindow.focus();
+    });
+    
     var storedAltitudeUnit = '',
       airspaceClip = '';
      var storedSectorDefs;
@@ -947,5 +980,10 @@
     }
     showSectors();
   });
- 
+  return {
+     importTask: function(taskinfo) {
+     showImported(taskinfo);
+     return "Task entered successfully";
+      }
+  }
 }(jQuery));

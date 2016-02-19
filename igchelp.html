@@ -61,7 +61,21 @@
             entered here will override anything in the IGC file, so if you want to use the task in the file, ensure this
             section is empty.
         </p>
-
+        
+        <h2>Importing a task from  XCWebPlan</h2>
+        <p>
+           Users in the UK will find it easy to enter BGA trigraphs to define a task; for users elsewhere entering latitudes and longitudes by hand will work, but is a pain.  If you have a suitable waypoint file available (".cup" or ".dat" format), an easy alternative is to mark out your task in XCWebPlan, and import it.  The process is simpler than it looks provided you do it as per instructions:
+           <ol>
+           <li>Click on the "Load" button in the "Task user entry" section.  A copy of XCWebPlan will open in another tab in your browser.</li>
+           <li>In XCWebPlan accept the airspace disclaimer and then select the waypoint file of your choice.</li>
+           <li>Enter your task by clicking on the map.  If you haven't used XCWebPlan before, consult the help file that comes with it.</li>
+           <li>Once you have entered the task a "Copy task" button will appear bottom right.  Click on it and you should get a message saying the task has been copied over.</li>
+           <li>Switch back to the "XCWebView" tab, and you will see your new task entered.</li>
+           <li>You can repeat the process as often as you like by simply switching back to the same tab with XCWebPlan on it.</li>
+           </ol>
+           Please note the process will only work if done as above; because there are very reasonable limitations on interaction between web pages for security reasons, it's a bit fiddly.  In particular, it will only work if you open the copy of XCWebPlan from the "Load" button- if it's opened by another route it won't recognise what it's supposed to be talking to (and you won't see the "copy task" button).  Also you will have to switch between tabs manually;  you won't see what's happening in the tab behind the current one, although we've provided messages which will hopefully tell you.</p>
+        </p>
+        
          <h2>Checking your performance</h2>
         <p>
             You can easily find out the speed you made around the task or how far short you were.  If you have both a task and an IGC file entered, click on the "Analyse task" button below the map.  If you completed the task it will show your speed; if you failed it will show your scoring distance (defined as the distance as far as the first failed turning point, minus the distance you were short of it).  A pin image will appear on the map marking your nearest approach to the failed point.
