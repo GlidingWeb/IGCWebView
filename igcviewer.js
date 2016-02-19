@@ -363,7 +363,7 @@
     return retval;
   }
 
-  function showTask() {
+  function showTask(mapControl) {
     var i;
     var pointlabel;
     $('#taskbuttons').html("");
@@ -384,6 +384,8 @@
       $('#tasklength').text("Task length: " + task.distance.toFixed(1) + " Km");
       $('#task').show();
     }
+    mapControl.addTask(task.coords, task.labels, sectordefs);
+      bindTaskButtons(mapControl);
   }
 
   function pointDescription(coords) {
@@ -407,7 +409,7 @@
     mapControl.zapTask();
     $('#task').hide();
      $('#taskdata').hide();
-    task = null;
+     task=null;
   }
 
   //Get display information associated with task
@@ -691,16 +693,8 @@
       mapControl.showTP(task.coords[li]);
     });
   }
-
-  function displayIgc(mapControl) {
-
-    clearTask(mapControl);
-    //check for user entered task- must be entry in start and finish
-    if ($('#start').val().trim() && $('#finish').val().trim()) {
-      parseUserTask();
-    }
-    //if user defined task is empty or malformed
-    if (task === null) {
+  
+  function getFileTask(igcFile) {
       if (igcFile.taskpoints.length > 4) {
         var i;
         var pointdata;
@@ -717,16 +711,28 @@
           }
         }
         if (taskdata.name.length > 1) {
-          task = maketask(taskdata);
+         return maketask(taskdata);
         }
       }
+     else {
+         return null;
+     }
+  }
+  
+  function displayIgc(mapControl) {
+      
+    clearTask(mapControl);
+    //check for user entered task- must be entry in start and finish
+    if ($('#start').val().trim() && $('#finish').val().trim()) {
+      parseUserTask();
+    }
+    //if user defined task is empty or malformed
+    if (task === null) {
+     task=getFileTask(igcFile);
     }
 
     if (task !== null) {
-      showTask();
-      mapControl.addTask(task.coords, task.labels, sectordefs);
-      //Need to bind event after buttons are created
-      bindTaskButtons(mapControl);
+      showTask(mapControl);
     }
     // Display the headers.
     var headerBlock = $('#headers');
@@ -842,10 +848,17 @@
     });
 
     $('#clearTask').click(function() {
-      $("#requestdata :input[type=text]").each(function() {
+        $("#requestdata :input[type=text]").each(function() {
         $(this).val("");
       });
       clearTask(mapControl);
+      if(igcFile) {
+      task=getFileTask(igcFile);
+      }
+      if(task) {
+           showTask(mapControl);
+      }
+     $('#clearTask').hide();
     });
 
     $('#zoomtrack').click(function() {
@@ -863,11 +876,10 @@
       });
 
     $('#enterTask').click(function() {
-      clearTask(mapControl);
+     clearTask(mapControl);
       parseUserTask();
-      showTask();
-      mapControl.addTask(task.coords, task.labels, sectordefs);
-      bindTaskButtons(mapControl);
+      showTask(mapControl);
+     $('#clearTask').show();
     });
 
     $('#barogram').on('plotclick', function(event, pos, item) {
@@ -878,7 +890,6 @@
     });
 
     $('#analyse').click(function() {
-       // checksects();
       $('#sectors').hide();
       $('taskcalcs').text('');
       $('#taskdata').show();

@@ -73,6 +73,10 @@ h3 {
   #declaration {
     float: right;
     }
+    
+  #clearTask  {
+    display: none;
+  }
 
 @media print, screen and (max-width: 1100px) {
  div.halfwidth   {
