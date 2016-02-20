@@ -146,10 +146,11 @@ function parseIGC(igcFile) {
                 model.recordTime[0] > positionTime) {
                 positionTime.setDate(flightDate.getDate() + 1);
             }
-        if(positionMatch[4] !=="0000000N00000000W") {
+          var curPosition= parseLatLong(positionMatch[4]);
+          if((curPosition[0] !==0) && (curPosition[1] !==0)) {
             return {
                 recordTime: positionTime,
-                latLong: parseLatLong(positionMatch[4]),
+                latLong: curPosition,
                 pressureAltitude: parseInt(positionMatch[6], 10),
                 gpsAltitude: parseInt(positionMatch[7], 10)
             };
