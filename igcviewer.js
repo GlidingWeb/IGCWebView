@@ -730,12 +730,6 @@ var ns=(function($) {
       });
       clearTask(mapControl);
       for(i=0;i < taskinfo.tpname.length;i++) {
-        //  if(i===taskinfo.tpname.length-1) {
-           // $('#finish').val(taskinfo.tpname[i]);
-         // }
-       //   else {
-          //$("#requestdata :input[type=text]").eq(i).val(taskinfo.tpname[i]);
-       //   }
         tpoints.name.push(taskinfo.tpname[i]);
         tpoints.coords.push( L.latLng(taskinfo.lat[i],taskinfo.lng[i]));
         }
@@ -745,15 +739,10 @@ var ns=(function($) {
       }
   
   function displayIgc(mapControl) {
- clearTask(mapControl);
-    //check for user entered task- must be entry in start and finish
-    if ($('#start').val().trim() && $('#finish').val().trim()) {
-      parseUserTask();
-    }
-    //if user defined task is empty or malformed
-    if (task === null) {
-     task=getFileTask(igcFile);
-    }
+       if( $("input[name=tasksource][value=infile]").prop('checked')) {
+           clearTask(mapControl);
+          task=getFileTask(igcFile);
+       }
 
     if (task !== null) {
       showTask(mapControl);
@@ -804,7 +793,7 @@ var ns=(function($) {
     }
     window.name="igcview";
     setSectorDefaults();
-        
+    $("input[name=tasksource][value=infile]").prop('checked', true);
     $('#fileControl').change(function() {
       if (this.files.length > 0) {
         var reader = new FileReader();
@@ -876,14 +865,6 @@ var ns=(function($) {
       $("#requestdata :input[type=text]").each(function() {
         $(this).val("");
       });
-      clearTask(mapControl);
-        if(igcFile) {
-      task=getFileTask(igcFile);
-      }
-      if(task) {
-           showTask(mapControl);
-      }
-     $('#clearTask').hide();
     });
 
     $('#zoomtrack').click(function() {
@@ -904,7 +885,8 @@ var ns=(function($) {
       clearTask(mapControl);
       parseUserTask();
       showTask(mapControl);
-      $('#clearTask').show();
+      $('#taskentry').hide();
+      $('#task').show();
     });
 
     $('#barogram').on('plotclick', function(event, pos, item) {
@@ -915,7 +897,6 @@ var ns=(function($) {
     });
 
     $('#analyse').click(function() {
-       // checksects();
       $('#sectors').hide();
       $('taskcalcs').text('');
       $('#taskdata').show();
@@ -950,13 +931,31 @@ var ns=(function($) {
       showSectors();
     });
 
-    $('#loadext').click(function() {
-        if((!(planWindow)) || (planWindow.closed)) {
-         planWindow=window.open("../XCWebPlan/xcplan.php?version=world","_blank");
-        }
+    $('input[type=radio][name=tasksource]').change(function() {
+       switch(this.value) {
+           case "infile":
+                $('#taskentry').hide();
+                clearTask(mapControl);
+                task=getFileTask(igcFile);
+                showTask(mapControl);
+                $('#task').show();
+               break;
+           case "user" :
+               $('#task').hide();
+               $('#taskentry').show();
+            break;
+           case "xcplan":
+            if((!(planWindow)) || (planWindow.closed)) {
+              planWindow=window.open("../TaskMap/xcplan.php?version=world","_blank");
+             }
        planWindow.focus();
+       break;
+           case "nix":
+            clearTask(mapControl);
+            task=null;
+       }
     });
-    
+   
     var storedAltitudeUnit = '',
       airspaceClip = '';
      var storedSectorDefs;

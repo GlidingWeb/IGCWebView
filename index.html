@@ -83,14 +83,15 @@
         </div>
     </div>
     <div class="halfwidth" id="declaration">
-        <h2>Task- user entry </h2>
+        <h2>Select Task</h2>
         <button class='toggle'>Hide</button>
         <div>
-            <p>Fill in this section if the task declaration in the IGC file is absent or incorrect. It will override any declaration
-                in the file. To use the declaration in the IGC file leave it blank.</p>
+        <p>Source:  <input type='radio' name='tasksource'  value='infile'>IGC File <input type='radio' name='tasksource'  value='user'>User Entry<input type='radio' name='tasksource'  value='xcplan'>XCWebPlan
+        <input type='radio' name='tasksource'  value='nix'>None </p>
+        <div id='taskentry'>
             <p>You may enter <a href="http://www.spsys.demon.co.uk/turningpoints.htm" target="_blank">BGA trigraphs</a>, six
-                character codes for waypoints on the <a href="http://www.segelflug.de/vereine/welt2000/" target="_blank"> Welt2000 database</a>                or Lat/Long in either 'dd:mm.mmm&nbsp;N&nbsp;ddd:mm.mmm&nbsp;W' or 'dd:mm:ss&nbsp;N&nbsp;ddd:mm:ss&nbsp;W'
-                format. Start and finish must be filled in, blank turning points will be ignored.  Alternatively <button id='loadext'>Load</button> from XCWebPlan.</p>
+                character codes for waypoints on the <a href="http://www.segelflug.de/vereine/welt2000/" target="_blank"> Welt2000 database</a>  or Lat/Long in either 'dd:mm.mmm&nbsp;N&nbsp;ddd:mm.mmm&nbsp;W' or 'dd:mm:ss&nbsp;N&nbsp;ddd:mm:ss&nbsp;W'
+                format. Start and finish must be filled in, blank turning points will be ignored.</p>
             <p id="requestdata">
                 <span class="nowrap">Start: <input type="text" id="start"/>&nbsp;</span>
                 <span class="nowrap">TP1:&nbsp;<input type="text"/>&nbsp;</span>
@@ -102,7 +103,7 @@
                 <button id="enterTask" class="inbutton">Enter</button>
                 <button id="clearTask" class="inbutton">Clear</button>
             </p>
-
+        </div>
         </div>
 
         <div id="task">
