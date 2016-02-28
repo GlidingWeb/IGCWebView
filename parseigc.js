@@ -133,7 +133,7 @@ function parseIGC(igcFile) {
         // Latitude and longitude are in degrees and minutes, with the minutes
         // value multiplied by 1000 so that no decimal point is needed.
         //                      hours    minutes  seconds  latitude    longitude        press alt  gps alt
-        var positionRegex = /^B([\d]{2})([\d]{2})([\d]{2})([\d]{7}[NS][\d]{8}[EW])([AV])([\d]{5})([\d]{5})/;
+        var positionRegex = /^B([\d]{2})([\d]{2})([\d]{2})([\d]{7}[NS][\d]{8}[EW])([AV])([-\d][\d]{4})([-\d][\d]{4})/;
         var positionMatch = positionRecord.match(positionRegex);
         if (positionMatch) {
             // Convert the time to a date and time. Start by making a clone of the date
