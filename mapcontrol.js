@@ -66,16 +66,44 @@ function createMapControl(elementName) {
         var sectorOptions = jQuery.extend({}, drawOptions, { startAngle: beginangle, stopAngle: endangle });
         return L.circle(centrept, sectorRadius, sectorOptions);
     }
-
-//Airspace control functions are now private to facilitate calling from the map move event
-
- function zapAirspace()  {
+    
+function zapAirspace()  {
                 if (mapLayers.airspace) {
                 map.removeLayer(mapLayers.airspace);
             }
  }
-
-    function showAirspace() {
+ 
+ function showAirspace() {
+     var i;
+    var polyPoints;
+     var suacircle;
+     var airStyle = {
+          "color": "black",
+            "weight": 1,
+             "opacity": 0.20,
+            "fillColor": "red",
+              "smoothFactor": 1
+               };
+       var suafeatures=[];
+      zapAirspace();
+      //alert(map.getZoom());
+      if((airClip >0) && (map.getZoom() > 6)) {
+      for(i=0 ; i < airspace.polygons.length;i++) {
+          if(airspace.polygons[i].base < airClip)  {
+            polyPoints=airspace.polygons[i].coords;
+               suafeatures.push(L.polygon(polyPoints,airStyle));
+              }
+            }
+        for(i=0; i <airspace.circles.length; i++) {
+                if (airspace.circles[i].base <  airClip)  {
+                    suafeatures.push(L.circle(airspace.circles[i].centre, 1000*airspace.circles[i].radius, airStyle));
+                    }
+                }
+         mapLayers.airspace = L.layerGroup(suafeatures).addTo(map); 
+         }
+ }
+ /*
+    function showAirspace_bak() {
        var mapbounds= map.getBounds();
 
        //Don't show airspace if the map is zoomed out so north/south latitude distance is over 10 degrees
@@ -117,7 +145,7 @@ function createMapControl(elementName) {
                     suafeatures.push(L.circle(data.circles[i].centre, 1000*data.circles[i].radius, airStyle));
                     }
                 }
-                    mapLayers.airspace = L.layerGroup(suafeatures).addTo(map); 
+                    mapLayers.airspace = L.layerGroup(suafeatures); 
                        }
     },"json");
         }
@@ -125,7 +153,7 @@ function createMapControl(elementName) {
         zapAirspace();
     }
     }
-
+*/
     // End of private methods
 
     var map = L.map(elementName);
@@ -134,6 +162,7 @@ function createMapControl(elementName) {
    var airClip= 0;
    var pin;
    var initBounds;
+   var airspace={};
 
     var mapQuestAttribution = ' | Tiles Courtesy of <a href="http://www.mapquest.com/" target="_blank">MapQuest</a> <img src="http://developer.mapquest.com/content/osm/mq_logo.png">';
     var mapLayers = {
@@ -150,6 +179,22 @@ function createMapControl(elementName) {
         })
     };
 
+map.on('zoomend', function() {
+     var a=map.getZoom();
+     //alert(map.layers.airspace);
+     //alert(a);
+ if(a < 7) {
+    map.removeLayer(mapLayers.airspace);
+    }
+ else {
+           //alert(map.hasLayer(mapLayers.airspace));
+ if(a===7) {
+            //alert("executing");
+          map.addLayer(mapLayers.airspace);
+  }
+     }
+});
+
     var layersControl = L.control.layers({
         'MapQuest OpenStreetMap': mapLayers.openStreetMap,
         'MapQuest Open Aerial (Photo)': mapLayers.photo
@@ -165,6 +210,8 @@ function createMapControl(elementName) {
         iconColor: 'white',
         markerColor: 'red'
     });
+    
+    
     
     return {
         reset: function () {
@@ -183,6 +230,11 @@ function createMapControl(elementName) {
             }
         },
 
+       setAirspace: function(suadata) {
+            airspace=suadata;
+            showAirspace();
+        },
+        
         addTrack: function (latLong) {
             trackLatLong = latLong;
             var trackLine = L.polyline(latLong, { color: 'blue' ,weight: 4});
@@ -255,18 +307,17 @@ function createMapControl(elementName) {
             mapLayers.task = L.layerGroup(taskLayers).addTo(map);
             layersControl.addOverlay(mapLayers.task, 'Task');
         },
-        
-        updateAirspace:  function(clip) {
+     
+    updateAirspace:  function(clip) {
             airClip=clip;
            showAirspace();
-        },
-
-        //called to turn on airspace updating
-        activateEvents: function() {
-         map.on('moveend', showAirspace);
-        },
+        },  
         
-        showTP: function(tpoint) {
+    setClipAlt: function(clip) {
+        airClip=clip;
+    },
+        
+    showTP: function(tpoint) {
             map.setView(tpoint,13);
         },
 
@@ -296,7 +347,3 @@ function createMapControl(elementName) {
         }
     };
 }
-
-
-
-

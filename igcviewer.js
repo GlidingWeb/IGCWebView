@@ -15,6 +15,37 @@ var ns=(function($) {
   var sectordefs = {};
   var mapControl;
   
+  function loadAirspace()
+  {
+   var country='xx';
+    //find country of takeoff
+    $.ajax({
+       url: "geolocate.php",
+      data: {
+        lat: igcFile.latLong[0][0],
+        lng: igcFile.latLong[0][1]
+      },
+      timeout: 3000,
+      method: "POST",
+      dataType: "text",
+      success: function(data) {
+          //we've found the country and got airspace for it
+         country=data;
+      },
+      complete: function() {
+           if(country!=='xx') {
+            //so we now get the airspace object
+           $.post("localairspace.php", {
+           country: country
+        },
+     function(data, status) {
+            mapControl.setAirspace(data);
+            }, "json");
+           }
+      }
+    });
+  }
+  
   function  showSectors() {
      $('#startrad').val( sectordefs.startrad);
     $('#finishrad').val(sectordefs.finrad);
@@ -126,7 +157,7 @@ var ns=(function($) {
     var sectorLimits = [];
     for (i = 1; i < task.coords.length; i++) {
       heading = topoint(task.coords[i - 1], task.coords[i]).bearing;
-      legheadings.push(heading);;
+      legheadings.push(heading);
     }
     for (i = 0; i < task.coords.length; i++) {
       var limits = {};
@@ -163,8 +194,6 @@ var ns=(function($) {
       var min=70;
       var max= 190;
       var target=340;
-      alert(min-target);
-       alert((target > min) || ((min-target) > 180))  && ((target < max) || ((target- max) > 180));
   }
  
  function checksector (target,comparison) {
@@ -198,7 +227,7 @@ var ns=(function($) {
     var currentDistance;
     var startIndexLatest;
     var bestSoFar = 0;
-    var curLeg = -1
+    var curLeg = -1;
     var sectorLimits = getSectorLimits();
      do {
       if (!(flying)) {
@@ -558,7 +587,7 @@ var ns=(function($) {
     var taskdata = {
       coords: [],
       name: []
-    }
+    };
     $("#requestdata :input[type=text]").each(function() {
       input = $(this).val().replace(/ /g, '');
       if (input.length > 0) {
@@ -668,7 +697,7 @@ var ns=(function($) {
   }
 
   function updateTimeline(timeIndex, mapControl) {
-    var currentPosition = igcFile.latLong[timeIndex];;
+    var currentPosition = igcFile.latLong[timeIndex];
     var positionText = pointDescription(L.latLng(currentPosition));
     var unitName = $('#altitudeUnits').val();
     //add in offset from UTC then convert back to UTC to get correct time in timezone!
@@ -677,8 +706,7 @@ var ns=(function($) {
       (igcFile.pressureAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
       unitName + ' (barometric) / ' +
       (igcFile.gpsAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
-      unitName + ' (GPS); ' +
-      positionText + " : " + timeIndex);
+      unitName + ' (GPS); ' + positionText );
     mapControl.setTimeMarker(timeIndex);
 
     barogramPlot.lockCrosshair({
@@ -723,7 +751,7 @@ var ns=(function($) {
       var tpoints={
             name: [],
             coords: []
-      }
+      };
       var i;
        $("#requestdata :input[type=text]").each(function() {
         $(this).val("");
@@ -763,10 +791,11 @@ var ns=(function($) {
     // setting the zoom level of the map or plotting the graph.
     $('#igcFileDisplay').show();
     mapControl.addTrack(igcFile.latLong);
+    loadAirspace(mapControl);
     //Barogram is now plotted on "complete" event of timezone query
     gettimezone(igcFile, mapControl);
     // Set airspace clip altitude to selected value and show airspace for the current window
-    mapControl.updateAirspace(Number($("#airclip").val()));
+    //mapControl.updateAirspace(Number($("#airclip").val()));
     //Enable automatic update of the airspace layer as map moves or zooms
     mapControl.activateEvents();
     $('#timeSlider').prop('max', igcFile.recordTime.length - 1);
@@ -784,6 +813,7 @@ var ns=(function($) {
 
   $(document).ready(function() {
     mapControl = createMapControl('map');
+    mapControl.setClipAlt($('#airclip').val());
     var planWindow=null;
     var altitudeUnit = $('#altitudeUnits').val();
     if (altitudeUnit === 'feet') {
