@@ -1,7 +1,11 @@
+
 /* global L */
 /* global jQuery */
 (function ($) {
     'use strict';
+    
+    var parser = require('./parseigc.js');
+    var mapWrapper = require('./mapcontrol.js');
 
     var igcFile = null;
     var barogramPlot = null;
@@ -416,7 +420,7 @@
     }
 
     $(document).ready(function () {
-        var mapControl = createMapControl('map');
+        var mapControl = mapWrapper.createMapControl('map');
         var altitudeUnit = $('#altitudeUnits').val();
         if (altitudeUnit === 'feet') {
             altitudeConversionFactor = 3.2808399;
@@ -433,11 +437,11 @@
                         $('#errorMessage').text('');
                         mapControl.reset();
                         $('#timeSlider').val(0);
-                        igcFile = parseIGC(this.result);
+                        igcFile = parser.parseIGC(this.result);
 
                         displayIgc(mapControl);
                     } catch (ex) {
-                        if (ex instanceof IGCException) {
+                        if (ex instanceof parser.IGCException) {
                             $('#errorMessage').text(ex.message);
                         }
                         else {

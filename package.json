@@ -1,0 +1,22 @@
+{
+  "name": "igcwebview",
+  "version": "1.2.0",
+  "description": "Viewer for gliding logger traces in IGC format.",
+  "main": "igcviewer.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GlidingWeb/IGCWebView.git"
+  },
+  "author": "Alistair Green and Richard Brisbourne",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/GlidingWeb/IGCWebView/issues"
+  },
+  "homepage": "https://github.com/GlidingWeb/IGCWebView#readme",
+  "devDependencies": {
+    "webpack": "^1.12.14"
+  }
+}
