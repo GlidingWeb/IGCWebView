@@ -71,20 +71,6 @@ $countries=array(
     
 require_once("../db_inc.php");
 $mysqli=new mysqli($dbserver,$username,$password,$database);
-$country="??";
-$ch = curl_init();
-  $url="https://search.mapzen.com/v1/reverse?api_key=search-mITW91A&size=1&sources=qs&layers=locality&point.lat=".$_POST['lat']."&point.lon=".$_POST['lng'];
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_TIMEOUT_MS,3000);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-      if( $json = curl_exec($ch)) {
-      $data=json_decode($json);
-      if(isset($data->features[0]->properties->country_a)) {
-           if(array_key_exists($data->features[0]->properties->country_a,$countries)) {
-               $country=$countries[$data->features[0]->properties->country_a];
-              }
-        }
-    }
     //find box approx 555 Km from start pt each way
     $north=$_POST['lat'] + 5;
     if($north > 90) {
@@ -114,10 +100,6 @@ $ch = curl_init();
   $mysqli->query($sql);
   $wherepolygons="INTERSECTS(outline,@bbox)";
   $wherecircles="INTERSECTS(mbr,@bbox)";
-  if($country!== '??')  {
-      $wherepolygons.=" AND country='".$country."'";
-      $wherecircles.=" AND country='".$country."'";
-  }
   $retval['polygons']=getpolygons($wherepolygons);
   $retval['circles']=getcircles($wherecircles);
   echo json_encode($retval,JSON_NUMERIC_CHECK);
