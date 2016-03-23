@@ -1,6 +1,3 @@
-/* global jQuery */
-/* global L */
-/* global $ */
 // Wrapper for the leaflet.js map control with methods
 // to manage the map layers.
 module.exports = {
@@ -42,6 +39,11 @@ module.exports = {
             var linestart = L.latLng(pt1['lat'] - latdelta, pt1['lng'] - longdelta);
             var lineend = L.latLng(pt1['lat'] + latdelta, longdelta + pt1['lng']);
             var polylinePoints = [linestart, lineend];
+            var polylineOptions = {
+                color: 'green',
+                weight: 3,
+                opacity: 0.8
+            };
 
             return L.polyline(polylinePoints, drawOptions);
         }
@@ -94,6 +96,7 @@ module.exports = {
                             $('#airspace_info').show();
                             var i;
                             var polyPoints;
+                            var suacircle;
                             var airStyle = {
                                 "color": "black",
                                 "weight": 1,
@@ -115,8 +118,7 @@ module.exports = {
                                     suafeatures.push(L.circle(data.circles[i].centre, 1000 * data.circles[i].radius, airStyle));
                                 }
                             }
-                            mapLayers.airspace = L.layerGroup(suafeatures).addTo(map); 
-                            // layersControl.addOverlay(mapLayers.airspace, 'Airspace');
+                            mapLayers.airspace = L.layerGroup(suafeatures).addTo(map);
                         }
                     }, "json");
             }
@@ -131,7 +133,7 @@ module.exports = {
 
         //Airspace clip altitude and initial bounds now a property of this object
         var airClip = 0;
-
+        var pin;
         var initBounds;
 
         var mapQuestAttribution = ' | Tiles Courtesy of <a href="http://www.mapquest.com/" target="_blank">MapQuest</a> <img src="http://developer.mapquest.com/content/osm/mq_logo.png">';
@@ -177,6 +179,9 @@ module.exports = {
                     map.removeLayer(mapLayers.task);
                     layersControl.removeLayer(mapLayers.task);
                 }
+                if (pin) {
+                    map.removeLayer(pin);
+                }
             },
 
             addTrack: function (latLong) {
@@ -201,9 +206,12 @@ module.exports = {
                     map.removeLayer(mapLayers.task);
                     layersControl.removeLayer(mapLayers.task);
                 }
+                if (pin) {
+                    map.removeLayer(pin);
+                }
             },
 
-            addTask: function (coordinates, names) {
+            addTask: function (coordinates, names, sectordefs) {
                 var taskLayers = [L.polyline(coordinates, { color: 'dimgray' })];
                 var lineDrawOptions = {
                     fillColor: 'green',
@@ -218,29 +226,31 @@ module.exports = {
                     weight: 1,
                     opacity: 0.8
                 };
-                //definitions from BGA rules
-                //defined here as any future changes will be easier
-                var startLineRadius = 5;
-                var finishLineRadius = 1;
-                var tpCircleRadius = 500;
-                var tpSectorRadius = 20000;
-                var tpSectorAngle = 90;
                 var j;
                 for (j = 0; j < coordinates.length; j++) {
                     taskLayers.push(L.marker(coordinates[j]).bindPopup(names[j]));
                     switch (j) {
                         case 0:
-                            var startline = getLine(coordinates[0], coordinates[1], startLineRadius, lineDrawOptions);
+                            var startline = getLine(coordinates[0], coordinates[1], sectordefs.startrad, lineDrawOptions);
                             taskLayers.push(startline);
                             break;
                         case (coordinates.length - 1):
-                            var finishline = getLine(coordinates[j], coordinates[j - 1], finishLineRadius, lineDrawOptions);
-                            taskLayers.push(finishline);
+                            if (sectordefs.finishtype === "line") {
+                                var finishline = getLine(coordinates[j], coordinates[j - 1], sectordefs.finrad, lineDrawOptions);
+                                taskLayers.push(finishline);
+                            }
+                            else {
+                                taskLayers.push(L.circle(coordinates[j], sectordefs.finrad * 1000, sectorDrawOptions));
+                            }
                             break;
                         default:
-                            taskLayers.push(L.circle(coordinates[j], tpCircleRadius, sectorDrawOptions));
-                            var tpsector = getTpSector(coordinates[j], coordinates[j - 1], coordinates[j + 1], tpSectorRadius, tpSectorAngle, sectorDrawOptions);
-                            taskLayers.push(tpsector);
+                            if (sectordefs.use_barrel) {
+                                taskLayers.push(L.circle(coordinates[j], sectordefs.tprad * 1000, sectorDrawOptions));
+                            }
+                            if (sectordefs.use_sector) {
+                                var tpsector = getTpSector(coordinates[j], coordinates[j - 1], coordinates[j + 1], sectordefs.sector_rad * 1000, sectordefs.sector_angle, sectorDrawOptions);
+                                taskLayers.push(tpsector);
+                            }
                     }
                 }
                 mapLayers.task = L.layerGroup(taskLayers).addTo(map);
@@ -259,6 +269,20 @@ module.exports = {
 
             showTP: function (tpoint) {
                 map.setView(tpoint, 13);
+            },
+
+            pushPin: function (coords) {
+
+                var pinIcon = L.icon({
+                    iconUrl: 'pin.png',
+                    iconSize: [33, 53], // size of the icon
+                    iconAnchor: [0, 50], // point of the icon which will correspond to marker's location
+                    popupAnchor: [-3, -76] // point from which the popup should open relative to the iconAnchor
+                });
+                if (pin) {
+                    map.removeLayer(pin);
+                }
+                pin = L.marker(L.latLng(coords), { icon: pinIcon }).addTo(map);
             },
 
             setTimeMarker: function (timeIndex) {

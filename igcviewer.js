@@ -3,7 +3,7 @@
 /* global jQuery */
 (function ($) {
     'use strict';
-    
+
     var parser = require('./parseigc.js');
     var mapWrapper = require('./mapcontrol.js');
 
@@ -16,10 +16,356 @@
         offset: 0,
         dst: false
     };
-    
     var task = null;
+    var sectordefs = {};
 
-    function showTask() {
+    function showSectors() {
+        $('#startrad').val(sectordefs.startrad);
+        $('#finishrad').val(sectordefs.finrad);
+        $('#tpbarrelrad').val(sectordefs.tprad);
+        $('#tpsectorrad').val(sectordefs.sector_rad);
+        $('#subtends').val(sectordefs.sector_angle);
+        $('#tpbarrel').prop("checked", sectordefs.use_barrel);
+        $('#tpsector').prop("checked", sectordefs.use_sector);
+        var value = sectordefs.finishtype;
+        $("input[name=finishtype][value=" + value + "]").prop('checked', true);
+    }
+
+    function setSectors() {
+        sectordefs.startrad = $('#startrad').val();
+        sectordefs.finrad = $('#finishrad').val();
+        sectordefs.tprad = $('#tpbarrelrad').val();
+        sectordefs.sector_rad = $('#tpsectorrad').val();
+        sectordefs.sector_angle = $('#subtends').val();
+        sectordefs.use_barrel = $('#tpbarrel').prop("checked");
+        sectordefs.use_sector = $('#tpsector').prop("checked");
+        sectordefs.finishtype = $("input[name='finishtype']:checked").val();
+    }
+
+    function setSectorDefaults() {
+        sectordefs.startrad = 5;   //start line radius
+        sectordefs.finrad = 1;   //finish line radius
+        sectordefs.tprad = 0.5;   //'beer can' radius
+        sectordefs.sector_rad = 20;   //tp sector radius
+        sectordefs.sector_angle = 90;  //tp sector
+        sectordefs.use_sector = true;
+        sectordefs.use_barrel = true;
+        sectordefs.finishtype = "line";
+    }
+
+    function realityCheck() {
+        var configerror = "";
+
+        if (!($('#startrad').val() > 0)) {
+            configerror = "\nStart radius needed";
+        }
+        if (!($('#finishrad').val() > 0)) {
+            configerror += "\nFinish radius needed";
+        }
+        if ((!($('#tpbarrel').prop('checked'))) && (!($('#tpsector').prop('checked')))) {
+            configerror += "\nSelect circle and/or sector for TPs";
+        }
+        if (($('#tpbarrel').prop('checked')) && (!($('#tpbarrelrad').val() > 0))) {
+            configerror += "\nTP circle radius needed";
+        }
+        if (($('#tpsector').prop('checked')) && (!($('#tpsectorrad').val() > 0))) {
+            configerror += "\nTP sector radius needed";
+        }
+        if (configerror.length > 0) {
+            alert(configerror);
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    function topoint(start, end) {
+        var earthrad = 6378; //  Earth radius km
+        var degLat1;
+        var degLng1;
+        var degLat2;
+        var degLng2;
+        if (start.hasOwnProperty("lat")) {
+            degLat1 = start.lat;
+            degLng1 = start.lng;
+        } else {
+            degLat1 = start[0];
+            degLng1 = start[1];
+        }
+        if (end.hasOwnProperty("lat")) {
+            degLat2 = end.lat;
+            degLng2 = end.lng;
+        } else {
+            degLat2 = end[0];
+            degLng2 = end[1];
+        }
+        var lat1 = degLat1 * Math.PI / 180;
+        var lat2 = degLat2 * Math.PI / 180;
+        var lon1 = degLng1 * Math.PI / 180;
+        var lon2 = degLng2 * Math.PI / 180;
+        var deltaLat = lat2 - lat1;
+        var deltaLon = lon2 - lon1;
+        var a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        var d = earthrad * c;
+        var y = Math.sin(lon2 - lon1) * Math.cos(lat2);
+        var x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+        var brng = (360 + Math.atan2(y, x) * 180 / Math.PI) % 360;
+        return {
+            distance: d,
+            bearing: brng
+        };
+    }
+
+    function getSectorLimits() {
+        var i;
+        var heading;
+        var maxbearing;
+        var minbearing;
+        var reciprocal;
+        var sectorAngle;
+        var bearingOut;
+        var bisector;
+        var legheadings = [];
+        var sectorLimits = [];
+        for (i = 1; i < task.coords.length; i++) {
+            heading = topoint(task.coords[i - 1], task.coords[i]).bearing;
+            legheadings.push(heading);;
+        }
+        for (i = 0; i < task.coords.length; i++) {
+            var limits = {};
+            switch (i) {
+                case 0: //start zone
+                    heading = legheadings[0];
+                    limits.max = heading - 90;
+                    limits.min = heading + 90;
+                    break;
+                case task.coords.length - 1: //finish line
+                    heading = legheadings[i - 1];
+                    limits.max = heading + 90;
+                    limits.min = heading - 90;
+                    break;
+                default:
+                    if (sectordefs.use_sector) {
+                        bearingOut = (legheadings[i] + 180) % 360;
+                        bisector = legheadings[i - 1] + (bearingOut - legheadings[i - 1]) / 2;
+                        if (Math.abs(bearingOut - legheadings[i - 1]) > 180) {
+                            bisector = (bisector + 180) % 360;
+                        }
+                        limits.max = bisector + sectordefs.sector_angle / 2;
+                        limits.min = bisector - sectordefs.sector_angle / 2;
+                    }
+            }
+            limits.max = (limits.max + 360) % 360;
+            limits.min = (limits.min + 360) % 360;
+            sectorLimits.push(limits);
+        }
+        return sectorLimits;
+    }
+
+    function checksects() {
+        var min = 70;
+        var max = 190;
+        var target = 340;
+        alert(min - target);
+        alert((target > min) || ((min - target) > 180)) && ((target < max) || ((target - max) > 180));
+    }
+
+    function checksector(target, comparison) {
+        var min = comparison.min;
+        var max = comparison.max;
+        if (min > max) {
+            max += 360;
+            if (target < comparison.max) {
+                target += 360;
+            }
+        }
+        return ((target > min) && (target < max));
+    }
+
+    function analyseTask(mapControl) {
+        var flying = false;
+        var distInterval;
+        var groundspeed;
+        var takeoffTime;
+        var i = 1;
+        var startstatus;
+        var nextstatus;
+        var tpindices = [];
+        var turned;
+        var j;
+        var tpAlt;
+        var timestamp;
+        var legName;
+        var bestIndex;
+        var distanceToNext;
+        var currentDistance;
+        var startIndexLatest;
+        var bestSoFar = 0;
+        var curLeg = -1
+        var sectorLimits = getSectorLimits();
+        do {
+            if (!(flying)) {
+                distInterval = topoint(igcFile.latLong[i - 1], igcFile.latLong[i]);
+                groundspeed = 3600000 * distInterval.distance / (igcFile.recordTime[i].getTime() - igcFile.recordTime[i - 1].getTime());
+                if (groundspeed > 20) {
+                    flying = true;
+                    takeoffTime = igcFile.recordTime[i].getTime();
+                    var takeOffDate = new Date(takeoffTime + timezone.offset);
+                    $('#taskcalcs').text("Take off: " + takeOffDate.getUTCHours() + ':' + pad(takeOffDate.getUTCMinutes()));
+                }
+            }
+            if (curLeg < 2) { //not reached first TP
+                startstatus = topoint(task.coords[0], igcFile.latLong[i]); //check if in start zone
+                if ((checksector(startstatus.bearing, sectorLimits[0])) && (startstatus.distance < sectordefs.startrad)) {
+                    curLeg = 0;
+                    startIndexLatest = tpindices[0];
+                }
+                else {
+                    if (curLeg === 0) {
+                        curLeg = 1;
+                        tpindices[0] = i;
+                        distanceToNext = task.legsize[1];
+                        timestamp = igcFile.recordTime[i].getTime();
+                    }
+                }
+            }
+            if ((curLeg > 0) && (curLeg < task.coords.length)) {
+                nextstatus = topoint(task.coords[curLeg], igcFile.latLong[i]);
+                turned = false;
+                if (curLeg === task.coords.length - 1) {
+                    if (nextstatus.distance < sectordefs.finrad) {
+                        if (sectordefs.finishtype === "circle") {
+                            turned = true;
+                        }
+                        else {
+                            if (checksector(nextstatus.bearing, sectorLimits[curLeg])) {
+                                turned = true;
+                            }
+                        }
+                    }
+                } else {
+                    if ((sectordefs.use_barrel) && (nextstatus.distance < sectordefs.tprad)) {
+                        turned = true;
+                    }
+                    if (sectordefs.use_sector) {
+                        if ((checksector(nextstatus.bearing, sectorLimits[curLeg])) && (nextstatus.distance < sectordefs.sector_rad)) {
+                            turned = true;
+                        }
+                    }
+                }
+                if (turned) {
+                    bestSoFar = distanceToNext;
+                    bestIndex = i;
+                    tpindices[curLeg] = i;
+                    if (curLeg === 1) {
+                        startIndexLatest = tpindices[0]; //last start before maximimum distance.  We stop checking for start after TP1
+                    }
+                    curLeg++;
+                    distanceToNext += task.legsize[curLeg];
+                } else {
+                    currentDistance = distanceToNext - nextstatus.distance;
+                    if (currentDistance > bestSoFar) {
+                        bestSoFar = currentDistance;
+                        startIndexLatest = tpindices[0];
+                        bestIndex = i;
+                    }
+                }
+            }
+            i++;
+        }
+        while ((i < igcFile.latLong.length) && (curLeg < task.coords.length));
+        i = igcFile.latLong.length;
+        do {
+            i--;
+            distInterval = topoint(igcFile.latLong[i - 1], igcFile.latLong[i]);
+            groundspeed = 3600000 * distInterval.distance / (igcFile.recordTime[i].getTime() - igcFile.recordTime[i - 1].getTime());
+        }
+        while ((groundspeed < 20) && (i > 0));
+        var landingTime = igcFile.recordTime[i].getTime();
+        var landingDate = new Date(landingTime + timezone.offset);
+        var pressureCheck = igcFile.pressureAltitude.reduce(function (a, b) {
+            return a + b;
+        }, 0); //total of pressure altitude records
+        if (pressureCheck === 0) {
+            alert("Pressure altitude not available.  Using GPS");
+        }
+        if ((curLeg === 0) && (bestSoFar > 0)) { //if landed in the start zone before TP 1 but have started
+            tpindices[0] = startIndexLatest; //take last point crossing line as a start
+            curLeg = 1; //and assume we are still on the first leg
+        }
+        for (j = 0; j < task.coords.length; j++) {
+            if (j < curLeg) {
+                if (pressureCheck > 0) { //if total of pressure altitude records > 0
+                    tpAlt = igcFile.pressureAltitude[tpindices[j]];
+                } else {
+                    tpAlt = igcFile.gpsAltitude[tpindices[j]];
+                }
+                timestamp = igcFile.recordTime[tpindices[j]].getTime();
+            }
+            switch (j) {
+                case 0:
+                    legName = "<br/><br/>Start: ";
+                    var startTime = timestamp;
+                    var startAlt = tpAlt;
+                    break;
+                case task.coords.length - 1:
+                    legName = "<br/>Finish: ";
+                    var finishTime = timestamp;
+                    var finishAlt = tpAlt;
+                    break;
+                default:
+                    legName = "<br/>TP" + j + ": ";
+            }
+            if (j < curLeg) {
+                $('#taskcalcs').append(legName + getPosInfo(timestamp, tpAlt));
+            } else {
+                $('#taskcalcs').append(legName + "No Control");
+            }
+        }
+        if (curLeg === task.coords.length) { //task completed
+            $('#taskcalcs').append("<br/><br/>" + task.distance.toFixed(2) + " Km task completed");
+            $('#taskcalcs').append("<br/>Elapsed time: " + toTimeString(finishTime - startTime, true));
+            $('#taskcalcs').append("<br/>Speed: " + (3600000 * task.distance / (finishTime - startTime)).toFixed(2) + " km/hr");
+            $('#taskcalcs').append("<br/>Height loss: " + (altitudeConversionFactor * (startAlt - finishAlt)).toFixed(0) + " " + $('#altitudeUnits').val());
+            if (altitudeConversionFactor !== 1) {
+                $('#taskcalcs').append(" (" + (startAlt - finishAlt).toFixed(0) + "m)");
+            }
+        }
+        else {
+            if ((curLeg > 0) && (bestSoFar > 0)) {
+                var chickenDate = new Date(igcFile.recordTime[bestIndex].getTime() + timezone.offset);
+                $('#taskcalcs').append("<br/><br/>\"GPS Landing\" at: " + chickenDate.getUTCHours() + ":" + pad(chickenDate.getUTCMinutes()));
+                mapControl.pushPin(igcFile.latLong[bestIndex]);
+                $('#taskcalcs').append("<br/>Position: " + pointDescription(L.latLng(igcFile.latLong[bestIndex])));
+                $('#taskcalcs').append("<br/>Scoring distance: " + bestSoFar.toFixed(2) + " Km");
+            }
+        }
+        $('#taskcalcs').append("<br/><br/>Landing: " + landingDate.getUTCHours() + ':' + pad(landingDate.getUTCMinutes()));
+        $('#taskcalcs').append("<br/>Flight time: " + toTimeString(landingTime - takeoffTime, false));
+
+    }
+
+    function getPosInfo(recordTime, altitude) {
+        var adjustedTime = new Date(recordTime + timezone.offset);
+        var showTime = adjustedTime.getUTCHours() + ':' + pad(adjustedTime.getUTCMinutes()) + ':' + pad(adjustedTime.getSeconds());
+        return showTime + ":  Altitude: " + (altitude * altitudeConversionFactor).toFixed(0) + " " + $('#altitudeUnits').val();
+    }
+
+    function toTimeString(interval, showsecs) {
+        var totalSeconds = interval / 1000;
+        var secondsPart = Math.round(totalSeconds % 60);
+        var totalMinutes = Math.floor(totalSeconds / 60);
+        var minutesPart = totalMinutes % 60;
+        var hoursPart = Math.floor(totalMinutes / 60);
+        var retval = hoursPart + "hrs " + minutesPart + "mins ";
+        if (showsecs) {
+            retval += secondsPart + "secs";
+        }
+        return retval;
+    }
+
+    function showTask(mapControl) {
         var i;
         var pointlabel;
         $('#taskbuttons').html("");
@@ -40,6 +386,8 @@
             $('#tasklength').text("Task length: " + task.distance.toFixed(1) + " Km");
             $('#task').show();
         }
+        mapControl.addTask(task.coords, task.labels, sectordefs);
+        bindTaskButtons(mapControl);
     }
 
     function pointDescription(coords) {
@@ -62,6 +410,7 @@
         $('#taskbuttons').html("");
         mapControl.zapTask();
         $('#task').hide();
+        $('#taskdata').hide();
         task = null;
     }
 
@@ -75,10 +424,12 @@
         var labels = [];
         var coords = [];
         var descriptions = [];
+        var legsize = [];
         names[0] = points.name[0];
         labels[0] = "Start";
         coords[0] = points.coords[0];
         descriptions[0] = pointDescription(points.coords[0]);
+        legsize[0] = 0;
         for (i = 1; i < points.coords.length; i++) {
             leglength = points.coords[i].distanceTo(points.coords[i - 1]);
             //eliminate situation when two successive points are identical (produces a divide by zero error on display. 
@@ -88,6 +439,7 @@
                 coords[j] = points.coords[i];
                 descriptions[j] = pointDescription(points.coords[i]);
                 labels[j] = "TP" + j;
+                legsize[j] = leglength / 1000;
                 distance += leglength;
                 j++;
             }
@@ -99,13 +451,13 @@
             labels: labels,
             coords: coords,
             descriptions: descriptions,
+            legsize: legsize,
             distance: distance
         };
         //Must be at least two points more than 30 metres apart
         if (names.length > 1) {
             return retval;
-        }
-        else {
+        } else {
             return null;
         }
     }
@@ -133,7 +485,9 @@
                         //BGA or Welt2000 point
                         $.ajax({
                             url: "findtp.php",
-                            data: { postdata: matchref[0] },
+                            data: {
+                                postdata: matchref[0]
+                            },
                             timeout: 3000,
                             method: "POST",
                             dataType: "json",
@@ -214,8 +568,7 @@
                 if (pointdata.message === "OK") {
                     taskdata.coords.push(pointdata.coords);
                     taskdata.name.push(pointdata.name);
-                }
-                else {
+                } else {
                     success = false;
                     alert("\"" + $(this).val() + "\"" + " not recognised-" + " ignoring entry");
                 }
@@ -223,8 +576,7 @@
         });
         if (success) {
             task = maketask(taskdata);
-        }
-        else {
+        } else {
             task = null;
         }
     }
@@ -292,8 +644,7 @@
         }, {
                 label: 'GPS altitude',
                 data: gpsBarogramData
-            }],
-            {
+            }], {
                 axisLabels: {
                     show: true
                 },
@@ -314,14 +665,12 @@
                     clickable: true,
                     autoHighlight: false
                 }
-            }
-            );
+            });
         return baro;
     }
 
     function updateTimeline(timeIndex, mapControl) {
-        var currentPosition = igcFile.latLong[timeIndex];
-        //var positionText=positionDisplay(currentPosition);
+        var currentPosition = igcFile.latLong[timeIndex];;
         var positionText = pointDescription(L.latLng(currentPosition));
         var unitName = $('#altitudeUnits').val();
         //add in offset from UTC then convert back to UTC to get correct time in timezone!
@@ -331,7 +680,7 @@
             unitName + ' (barometric) / ' +
             (igcFile.gpsAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
             unitName + ' (GPS); ' +
-            positionText);
+            positionText + " : " + timeIndex);
         mapControl.setTimeMarker(timeIndex);
 
         barogramPlot.lockCrosshair({
@@ -347,6 +696,31 @@
         });
     }
 
+    function getFileTask(igcFile) {
+        if (igcFile.taskpoints.length > 4) {
+            var i;
+            var pointdata;
+            var taskdata = {
+                coords: [],
+                name: []
+            };
+            //For now, ignore takeoff and landing
+            for (i = 1; i < igcFile.taskpoints.length - 1; i++) {
+                pointdata = getPoint(igcFile.taskpoints[i]);
+                if (pointdata.message === "OK") {
+                    taskdata.coords.push(pointdata.coords);
+                    taskdata.name.push(pointdata.name);
+                }
+            }
+            if (taskdata.name.length > 1) {
+                return maketask(taskdata);
+            }
+        }
+        else {
+            return null;
+        }
+    }
+
     function displayIgc(mapControl) {
 
         clearTask(mapControl);
@@ -356,32 +730,11 @@
         }
         //if user defined task is empty or malformed
         if (task === null) {
-            if (igcFile.taskpoints.length > 4) {
-                var i;
-                var pointdata;
-                var taskdata = {
-                    coords: [],
-                    name: []
-                };
-                //For now, ignore takeoff and landing
-                for (i = 1; i < igcFile.taskpoints.length - 1; i++) {
-                    pointdata = getPoint(igcFile.taskpoints[i]);
-                    if (pointdata.message === "OK") {
-                        taskdata.coords.push(pointdata.coords);
-                        taskdata.name.push(pointdata.name);
-                    }
-                }
-                if (taskdata.name.length > 1) {
-                    task = maketask(taskdata);
-                }
-            }
+            task = getFileTask(igcFile);
         }
 
         if (task !== null) {
-            showTask();
-            mapControl.addTask(task.coords, task.labels);
-            //Need to bind event after buttons are created
-            bindTaskButtons(mapControl);
+            showTask(mapControl);
         }
         // Display the headers.
         var headerBlock = $('#headers');
@@ -412,8 +765,7 @@
         if (window.localStorage) {
             try {
                 localStorage.setItem(name, value);
-            }
-            catch (e) {
+            } catch (e) {
                 // If permission is denied, ignore the error.
             }
         }
@@ -424,10 +776,11 @@
         var altitudeUnit = $('#altitudeUnits').val();
         if (altitudeUnit === 'feet') {
             altitudeConversionFactor = 3.2808399;
-        }
-        else {
+        } else {
             altitudeConversionFactor = 1.0;
         }
+
+        setSectorDefaults();
 
         $('#fileControl').change(function () {
             if (this.files.length > 0) {
@@ -438,13 +791,11 @@
                         mapControl.reset();
                         $('#timeSlider').val(0);
                         igcFile = parser.parseIGC(this.result);
-
                         displayIgc(mapControl);
                     } catch (ex) {
                         if (ex instanceof parser.IGCException) {
                             $('#errorMessage').text(ex.message);
-                        }
-                        else {
+                        } else {
                             throw ex;
                         }
                     }
@@ -465,8 +816,7 @@
             var altitudeUnit = $(this).val();
             if (altitudeUnit === 'feet') {
                 altitudeConversionFactor = 3.2808399;
-            }
-            else {
+            } else {
                 altitudeConversionFactor = 1.0;
             }
             if (igcFile !== null) {
@@ -478,7 +828,7 @@
                 storePreference("altitudeUnit", altitudeUnit);
             }
         });
-  
+
         // We need to handle the 'change' event for IE, but
         // 'input' for Chrome and Firefox in order to update smoothly
         // as the range input is dragged.
@@ -504,6 +854,13 @@
                 $(this).val("");
             });
             clearTask(mapControl);
+            if (igcFile) {
+                task = getFileTask(igcFile);
+            }
+            if (task) {
+                showTask(mapControl);
+            }
+            $('#clearTask').hide();
         });
 
         $('#zoomtrack').click(function () {
@@ -515,8 +872,7 @@
                 $(this).next().toggle();
                 if ($(this).next().is(':visible')) {
                     $(this).text('Hide');
-                }
-                else {
+                } else {
                     $(this).text('Show');
                 }
             });
@@ -524,9 +880,8 @@
         $('#enterTask').click(function () {
             clearTask(mapControl);
             parseUserTask();
-            showTask();
-            mapControl.addTask(task.coords, task.labels);
-            bindTaskButtons(mapControl);
+            showTask(mapControl);
+            $('#clearTask').show();
         });
 
         $('#barogram').on('plotclick', function (event, pos, item) {
@@ -536,23 +891,63 @@
             }
         });
 
-        var storedAltitudeUnit = '', airspaceClip = '';
+        $('#analyse').click(function () {
+            $('#sectors').hide();
+            $('taskcalcs').text('');
+            $('#taskdata').show();
+            analyseTask(mapControl);
+        });
+
+        $('#configure').click(function () {
+            $('#taskdata').hide();
+            $('#sectors').show();
+        });
+
+        $('.closewindow').click(function () {
+            $(this).parent().hide();
+        });
+
+        $('#setsectors').click(function () {
+            if (realityCheck()) {
+                $('#sectors').hide();
+                setSectors();
+                if (task != null) {
+                    mapControl.zapTask();
+                    mapControl.addTask(task.coords, task.labels, sectordefs);
+                }
+                if ($('#savesectors').prop("checked")) {
+                    storePreference("sectors", JSON.stringify(sectordefs));
+                }
+            }
+        });
+
+        $('#tpdefaults').click(function () {
+            setSectorDefaults();
+            showSectors();
+        });
+
+        var storedAltitudeUnit = '',
+            airspaceClip = '';
+        var storedSectorDefs;
         if (window.localStorage) {
             try {
                 storedAltitudeUnit = localStorage.getItem("altitudeUnit");
                 if (storedAltitudeUnit) {
                     $('#altitudeUnits').val(storedAltitudeUnit).trigger('change', true);
                 }
-
+                storedSectorDefs = localStorage.getItem("sectors");
+                if (storedSectorDefs) {
+                    sectordefs = JSON.parse(storedSectorDefs);
+                }
                 airspaceClip = localStorage.getItem("airspaceClip");
                 if (airspaceClip) {
                     $('#airclip').val(airspaceClip);
                 }
-            }
-            catch (e) {
+            } catch (e) {
                 // If permission is denied, ignore the error.
             }
         }
+        showSectors();
     });
 
 } (jQuery));
