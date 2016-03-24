@@ -120,10 +120,6 @@
     function getSectorLimits() {
         var i;
         var heading;
-        var maxbearing;
-        var minbearing;
-        var reciprocal;
-        var sectorAngle;
         var bearingOut;
         var bisector;
         var legheadings = [];

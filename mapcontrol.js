@@ -39,11 +39,6 @@ module.exports = {
             var linestart = L.latLng(pt1['lat'] - latdelta, pt1['lng'] - longdelta);
             var lineend = L.latLng(pt1['lat'] + latdelta, longdelta + pt1['lng']);
             var polylinePoints = [linestart, lineend];
-            var polylineOptions = {
-                color: 'green',
-                weight: 3,
-                opacity: 0.8
-            };
 
             return L.polyline(polylinePoints, drawOptions);
         }
@@ -96,7 +91,6 @@ module.exports = {
                             $('#airspace_info').show();
                             var i;
                             var polyPoints;
-                            var suacircle;
                             var airStyle = {
                                 "color": "black",
                                 "weight": 1,
@@ -297,4 +291,4 @@ module.exports = {
             }
         };
     }
-}
+};
