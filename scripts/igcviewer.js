@@ -4,7 +4,7 @@
 (function ($) {
     'use strict';
 
-    var parser = require('./model/parseigc.js');
+    var presenter = require('./presenter.js');
     var mapWrapper = require('./views/mapcontrol.js');
 
     var igcFile = null;
@@ -732,18 +732,7 @@
         if (task !== null) {
             showTask(mapControl);
         }
-        // Display the headers.
-        var headerBlock = $('#headers');
-        headerBlock.html('');
-        //Delay display of date till we get the timezone
-        var headerIndex;
-        for (headerIndex = 0; headerIndex < igcFile.headers.length; headerIndex++) {
-            headerBlock.append(
-                $('<tr></tr>').append($('<th></th>').text(igcFile.headers[headerIndex].name))
-                    .append($('<td></td>').text(igcFile.headers[headerIndex].value))
-                );
-        }
-        $('#flightInfo').show();
+
         // Reveal the map and graph. We have to do this before
         // setting the zoom level of the map or plotting the graph.
         $('#igcFileDisplay').show();
@@ -768,7 +757,22 @@
     }
 
     $(document).ready(function () {
+        var eventTypes = require('./eventTypes.js');
+        require('./views/headers.js')
+            .setup(presenter);
+
+        presenter.on(eventTypes.error, function (errorMessage) {
+            $('#errorMessage').text(errorMessage);
+        });
+
         var mapControl = mapWrapper.createMapControl('map');
+        
+        // Temporary workaround until refactoring complete
+        presenter.on(eventTypes.igcLoaded, function (igc) {
+            igcFile = igc;
+            displayIgc(mapControl);
+        });
+
         var altitudeUnit = $('#altitudeUnits').val();
         if (altitudeUnit === 'feet') {
             altitudeConversionFactor = 3.2808399;
@@ -782,19 +786,12 @@
             if (this.files.length > 0) {
                 var reader = new FileReader();
                 reader.onload = function (e) {
-                    try {
-                        $('#errorMessage').text('');
-                        mapControl.reset();
-                        $('#timeSlider').val(0);
-                        igcFile = parser.parseIGC(this.result);
-                        displayIgc(mapControl);
-                    } catch (ex) {
-                        if (ex instanceof parser.IGCException) {
-                            $('#errorMessage').text(ex.message);
-                        } else {
-                            throw ex;
-                        }
-                    }
+                    // TODO: Remove once refactoring complete
+                    $('#errorMessage').text('');
+                    mapControl.reset();
+                    $('#timeSlider').val(0);
+                    // End code to remove
+                    presenter.loadFile(this.result);
                 };
                 reader.readAsText(this.files[0]);
             }
