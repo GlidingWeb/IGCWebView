@@ -33,6 +33,59 @@ in most modern browsers, but not in Internet Explorer 9 or earlier
 versions.
 
 *IGC Web View* has been tested in the following browsers:
-* Firefox (Windows and Android versions)
+* Firefox (Windows / Android / Linux)
 * Internet Explorer 11
 * Chrome (Windows / Android / Linux)
+
+# Build instructions for developers
+
+IGC Web View is built using [Webpack](https://webpack.github.io), which
+combines all of the JavaScript source code files into a single bundle. This
+reduces the page load time for end users by minimising the number of HTTP requests
+needed to fetch the scripts. Webpack also provides a `require` directive which
+enables script files to reference each other, allowing the code to be broken up
+into distinct modules for easier maintenance.
+
+## Prerequisites
+
+First install [Node.js](https://nodejs.org), which is a JavaScript interpreter
+that runs outside the browser. This is needed in order to run Webpack.
+
+Note that many major Linux distributions (including Ubuntu) come with an
+outdated version of Node. To get a more recent version, and receive regular
+security updates, see: [Installing Node.js via package manager](https://nodejs.org/en/download/package-manager).
+
+Node.js is also available for Windows and Mac OS X.
+
+Once Node is installed, use the Node Package Manager to get Webpack:
+```
+npm install -g webpack
+```
+(On Linux systems, this command must be executed as `root`.)
+
+## Build process
+
+### For development
+
+Open a command prompt, navigate to the directory where you cloned the
+Git repository, and simply type:
+```
+webpack
+```
+
+This will combine the JavaScript modules into a single file, `bundle.js`,
+which is referenced by `index.html` but is deliberately excluded from source
+control.
+
+If you would like `webpack` to rerun automatically whenever one of the source
+code files changes, open a separate terminal window and type:
+```
+webpack --watch
+```
+
+### For production
+
+To minify the JavaScript for production use, type:
+```
+webpack -p
+```
