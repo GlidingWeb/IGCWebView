@@ -1,5 +1,5 @@
 module.exports = {
-    entry: "./igcviewer.js",
+    entry: "./scripts/igcviewer.js",
     output: {
         filename: "./bundle.js"
     }

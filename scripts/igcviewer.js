@@ -4,8 +4,8 @@
 (function ($) {
     'use strict';
 
-    var parser = require('./parseigc.js');
-    var mapWrapper = require('./mapcontrol.js');
+    var parser = require('./model/parseigc.js');
+    var mapWrapper = require('./views/mapcontrol.js');
 
     var igcFile = null;
     var barogramPlot = null;
