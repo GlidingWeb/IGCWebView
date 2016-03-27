@@ -1,9 +1,10 @@
 module.exports = (function () {
     'use strict';
-    
+
     var eventTypes = require('./eventTypes.js');
     var parser = require('./model/parseigc.js');
-    
+    var timezone = require('./model/timezone.js');
+
     var listeners = [];
     var igcFile = {};
     
@@ -20,7 +21,14 @@ module.exports = (function () {
         loadFile: function (igc) {
             try {
                 igcFile = parser.parseIGC(igc);
-                trigger(eventTypes.igcLoaded, igcFile);
+                timezone.detectTimeZone(
+                    igcFile.latLong[0],
+                    igcFile.recordTime[0],
+                    function (tz) {
+                        console.log('Time zone: ' + tz.zonename);
+                        console.log('UTC offset: ' + tz.offset);
+                        trigger(eventTypes.igcLoaded, igcFile);
+                    });
             }
             catch (ex) {
                 if (ex instanceof parser.IGCException) {
