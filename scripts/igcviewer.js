@@ -7,7 +7,6 @@ var ns = (function ($) {
     var mapWrapper = require('./views/mapcontrol.js');
 
     var igcFile = null;
-    var barogramPlot = null;
     var altitudeConversionFactor = 3.2808399; // Conversion from metres to required units
     var timezone = {
         zonename: "Europe/London",
@@ -588,103 +587,9 @@ var ns = (function ($) {
             task = null;
         }
     }
-
-    function displaydate(timestamp) {
-        var daynames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        var monthnames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-        return daynames[timestamp.getUTCDay()] + " " + timestamp.getUTCDate() + " " + monthnames[timestamp.getUTCMonth()] + " " + timestamp.getUTCFullYear();
-    }
-
-    //get timezone data from timezonedb.  Via php to avoid cross-domain data request from the browser
-    //Timezone dependent processes run  on file load are here as request is asynchronous
-    //If the request fails or times out, silently reverts to default (UTC)
-    function gettimezone(igcFile, mapControl) {
-        var flightdate = igcFile.recordTime[0];
-        $.ajax({
-            url: "gettimezone.php",
-            data: {
-                stamp: flightdate / 1000,
-                lat: igcFile.latLong[0][0],
-                lon: igcFile.latLong[0][1]
-            },
-            timeout: 3000,
-            method: "POST",
-            dataType: "json",
-            success: function (data) {
-                if (data.status === "OK") {
-                    timezone.zonename = data.zoneName;
-                    timezone.zoneabbr = data.abbreviation;
-                    timezone.offset = 1000 * parseFloat(data.gmtOffset);
-                    if (data.dst === "1") {
-                        timezone.zonename += ", daylight saving";
-                    }
-                }
-            },
-            complete: function () {
-                //Local date may not be the same as UTC date
-                //var localdate = new Date(flightdate.getTime() + timezone.offset);
-                //$('#datecell').text(displaydate(localdate));
-                barogramPlot = plotBarogram(igcFile);
-                updateTimeline(0);
-            }
-        });
-    }
-
+    
     function pad(n) {
         return (n < 10) ? ("0" + n.toString()) : n.toString();
-    }
-
-    function plotBarogram() {
-        var nPoints = igcFile.recordTime.length;
-        var pressureBarogramData = [];
-        var gpsBarogramData = [];
-        var j;
-        var timestamp;
-        for (j = 0; j < nPoints; j++) {
-            timestamp = igcFile.recordTime[j].getTime() + timezone.offset;
-            pressureBarogramData.push([timestamp, igcFile.pressureAltitude[j] * altitudeConversionFactor]);
-            gpsBarogramData.push([timestamp, igcFile.gpsAltitude[j] * altitudeConversionFactor]);
-        }
-        var baro = $.plot($('#barogram'), [{
-            label: 'Pressure altitude',
-            data: pressureBarogramData
-        }, {
-                label: 'GPS altitude',
-                data: gpsBarogramData
-            }], {
-                axisLabels: {
-                    show: true
-                },
-                xaxis: {
-                    mode: 'time',
-                    timeformat: '%H:%M',
-                    axisLabel: 'Time (' + timezone.zonename + ')'
-                },
-                yaxis: {
-                    axisLabel: 'Altitude / ' + $('#altitudeUnits').val()
-                },
-
-                crosshair: {
-                    mode: 'xy'
-                },
-
-                grid: {
-                    clickable: true,
-                    autoHighlight: false
-                }
-            });
-        return baro;
-    }
-
-    function updateTimeline(timeIndex) {
-        //add in offset from UTC then convert back to UTC to get correct time in timezone!
-        var adjustedTime = new Date(igcFile.recordTime[timeIndex].getTime() + timezone.offset);
-
-        barogramPlot.lockCrosshair({
-            x: adjustedTime.getTime(),
-            y: igcFile.pressureAltitude[timeIndex] * altitudeConversionFactor
-        });
     }
 
     function bindTaskButtons(mapControl) {
@@ -752,8 +657,6 @@ var ns = (function ($) {
         $('#igcFileDisplay').show();
         mapControl.addTrack(igcFile.latLong);
         loadAirspace(mapControl);
-        //Barogram is now plotted on "complete" event of timezone query
-        gettimezone(igcFile, mapControl);
         // Set airspace clip altitude to selected value and show airspace for the current window
         //mapControl.updateAirspace(Number($("#airclip").val()));
         //Enable automatic update of the airspace layer as map moves or zooms
@@ -773,8 +676,9 @@ var ns = (function ($) {
 
     $(document).ready(function () {
         var eventTypes = require('./eventTypes.js');
-        require('./views/headers.js')
-            .setup(presenter);
+        
+        require('./views/headers.js').setup(presenter);
+        require('./views/barogram.js').setup(presenter);
 
         var planWindow = null;
 
@@ -810,9 +714,13 @@ var ns = (function ($) {
             $('#timePositionDisplay').html(posDisplay);
         };
 
-        presenter.on(eventTypes.timeIndexChanged, function (timeIndex, source) {
-            mapControl.setTimeMarker(timeIndex);
+        presenter.on(eventTypes.timeIndexChanged, function (data) {
+            mapControl.setTimeMarker(data.timeIndex);
             updatePositionDisplay(presenter);
+            
+            if (data.source !== 'slider') {
+                $('#timeSlider').val(data.timeIndex);
+            }
         });
 
         presenter.on(eventTypes.altitudeUnitChanged, function (unit) {
@@ -861,11 +769,7 @@ var ns = (function ($) {
             } else {
                 altitudeConversionFactor = 1.0;
             }
-            if (igcFile !== null) {
-                barogramPlot = plotBarogram();
-                updateTimeline($('#timeSlider').val());
-            }
-
+            
             if (!raisedProgrammatically) {
                 storePreference("altitudeUnit", altitudeUnit);
             }
@@ -877,14 +781,10 @@ var ns = (function ($) {
         $('#timeSlider').on('input', function () {
             var t = parseInt($(this).val(), 10);
             presenter.setTimeIndex(t, 'slider');
-            // TODO: Remove after refactor
-            updateTimeline(t);
         });
         $('#timeSlider').on('change', function () {
             var t = parseInt($(this).val(), 10);
             presenter.setTimeIndex(t, 'slider');
-            // TODO: Remove after refactor
-            updateTimeline(t, mapControl);
         });
 
         $('#airclip').change(function () {
@@ -923,14 +823,7 @@ var ns = (function ($) {
             $('#task').show();
         });
 
-        $('#barogram').on('plotclick', function (event, pos, item) {
-            if (item) {
-                presenter.setTimeIndex(item.dataIndex, 'barogram');
-                // TODO: Remove after refactor
-                updateTimeline(item.dataIndex);
-                $('#timeSlider').val(item.dataIndex);
-            }
-        });
+        
 
         $('#analyse').click(function () {
             $('#sectors').hide();

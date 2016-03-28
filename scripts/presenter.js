@@ -5,9 +5,18 @@
     var eventTypes = require('./eventTypes.js');
     var parser = require('./model/parseigc.js');
     var timezone = require('./model/timezone.js');
-
+    
     var listeners = [];
+    
     var igcFile = {};
+    
+    var timeZoneSettings = {
+        name: 'UTC',
+        abbreviation: 'UTC',
+        offsetMinutes: 0
+    };
+    
+    var isFileLoaded = false;
     
     // Altitudes converted to feet or metres as appropriate
     var pressureAltitude = [], gpsAltitude = [];
@@ -57,12 +66,19 @@
     //         which they themselves caused.
     function setTimeIndex(t, source) {
         timeIndex = t;
-        trigger(eventTypes.timeIndexChanged, t, source);
+        trigger(eventTypes.timeIndexChanged, { timeIndex: timeIndex, source: source });
     }
 
     module.exports = {
         getAltitudeUnit: function () {
             return altitudeUnit;
+        },
+        
+        getAltitudeValues: function() {
+            return {
+                pressure: pressureAltitude,
+                gps: gpsAltitude
+            };
         },
         
         // Gets the time, latitude, longitude and altitude
@@ -89,6 +105,18 @@
                 timeZoneAbbreviation: 'UTC'
             };
         },
+        
+        getTimeValues: function() {
+            return igcFile.localTime;
+        },
+        
+        getTimeZoneSettings: function() {
+            return timeZoneSettings;
+        },
+        
+        isFileLoaded: function() {
+            return isFileLoaded;
+        },
 
         loadFile: function (igc) {
             try {
@@ -101,14 +129,19 @@
                     igcFile.recordTime[0],
                     function (tz) {
                         // Convert time offset from milliseconds to minutes.
-                        var offsetMinutes = tz.offset / 60.0e3;
-
+                        timeZoneSettings = {
+                            name: tz.zonename,
+                            abbreviation: tz.zoneabbr,
+                            offsetMinutes: tz.offset / 60.0e3
+                        };
+                        
                         igcFile.localTime = igcFile.recordTime.map(function (t) {
-                            return moment(t).utcOffset(offsetMinutes);
+                            return moment(t).utcOffset(timeZoneSettings.offsetMinutes);
                         });
                         
                         // Convert altitudes to feet if required.
                         setAltitudeUnit(altitudeUnit);
+                        isFileLoaded = true;
                         trigger(eventTypes.igcLoaded, igcFile);
                         setTimeIndex(0, 'presenter');
                     });
