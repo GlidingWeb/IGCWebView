@@ -20,7 +20,7 @@ var ns = (function ($) {
     var mapControl;
 
 
-    function loadAirspace() {
+    function loadAirspace(mapControl) {
         $.post("getairspace.php",
             {
                 lat: igcFile.latLong[0][0],
@@ -751,7 +751,7 @@ var ns = (function ($) {
         // setting the zoom level of the map or plotting the graph.
         $('#igcFileDisplay').show();
         mapControl.addTrack(igcFile.latLong);
-        loadAirspace();
+        loadAirspace(mapControl);
         //Barogram is now plotted on "complete" event of timezone query
         gettimezone(igcFile, mapControl);
         // Set airspace clip altitude to selected value and show airspace for the current window
