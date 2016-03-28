@@ -1,69 +1,107 @@
 <?php
-$countries=[];
+function getpolygons($whereclause) {
+global $mysqli;
+$polygons=array();
+$polylist = $mysqli->query("SELECT base,AsText(outline) FROM geopoly WHERE $whereclause");
+while($polygon=$polylist->fetch_row())
+   {
+   $reduced=str_replace(")","",str_replace("LINESTRING(","",str_replace(")LINESTRING(",",",$polygon[1])));
+   $pointlist=explode(",",$reduced);
+   unset($coordlist);
+   foreach($pointlist as $point) {
+     $splitpoint= explode(" ",$point);
+     $coords['lat']=$splitpoint[0];
+     $coords['lng']=$splitpoint[1];
+     $coordlist[]=$coords;
+   }
+   $polygons[]=( object)array("base"=>$polygon[0],"coords"=>$coordlist);
+   }
+   $polylist->close();
+   return  $polygons;
+}
+
+function getcircles($whereclause) {
+global $mysqli;
+$circlelist = $mysqli->query("SELECT base,AsText(centre),radius FROM geocircle WHERE $whereclause");
+$circles=array();
+   while($circle=$circlelist->fetch_row()) {
+   $reduced=str_replace(")","",str_replace("POINT(","",$circle[1]));
+   $splitpoint=explode(" ",$reduced);
+   $centre['lat']=$splitpoint[0];
+   $centre['lng']=$splitpoint[1];
+    $circles[]=( object)array("base"=>$circle[0],"centre"=>$centre,"radius"=>$circle[2]);
+   }
+   return $circles;
+}
+
+$countries=array(
+   'AUT'=>'at',
+   'AUS'=>'au',
+   'BEL'=>'be',
+   'BRA'=>'br',
+   'CAN'=>'ca',
+   'CHE'=>'ch',
+   'CZE'=>'cz',
+   'DEU'=>'de',
+   'EST'=>'ee',
+   'ESP'=>'es',
+   'FIN'=>'fi',
+   'FRA'=>'fr',
+   'HRV'=>'hr',
+   'HUN'=>'hu',
+   'IRL'=>'ie',
+   'ITA'=>'it',
+   'LTU'=>'lt',
+   'LVA'=>'lv',
+   'MKD'=>'mk',
+   'NLD'=>'nl',
+   'NOR'=>'no',
+   'NZL'=>'nz',
+   'POL'=>'pl',
+   'PRT'=>'pt',
+   'SWE'=>'se',
+   'SVN'=>'si',
+   'SVK'=>'sk',
+   'GBR'=>'uk',
+   'USA'=>'us',
+   'ZAF'=>'za',
+    );
+
+ $degdist = 111; // km- circumference of the earth divided by 360
+    
 require_once("../db_inc.php");
 $mysqli=new mysqli($dbserver,$username,$password,$database);
-$box="POLYGON((".$_POST['maxNorth']." ".$_POST['minEast'].",".$_POST['maxNorth']." ".$_POST['maxEast'].",".$_POST['minNorth']." ".$_POST['maxEast'].",".$_POST['minNorth']." ".$_POST['minEast'].",".$_POST['maxNorth']." ".$_POST['minEast']."))";
-$sql="SET @bbox=GeomFromText('".$box."')";
-$mysqli->query($sql);
-echo  "{\n\"polygons\": [";
-$result = $mysqli->query("SELECT country,base,AsText(outline) FROM geopoly WHERE INTERSECTS(outline,@bbox)");
-$started= false;
-if($result->num_rows !==0) {
-   while($polyinfo=$result->fetch_row()) {
-   if($started) {
-   echo ",";
-   }
-   $started="true";
-    $countries[]= $polyinfo[0];
-    echo  "\n{\n\"base\": $polyinfo[1],\n\"coords\": [[ ";
-     // not very readable but much faster than regex
-     echo str_replace(" ",",",str_replace(",","],[",str_replace(")","",str_replace("LINESTRING(","",$polyinfo[2]))))."]]\n}";
-     }
-}
-$result->close();
-echo "],\n";
-echo "\"circles\": [\n";
-$circledata = $mysqli->query("SELECT country,base,AsText(centre),radius FROM geocircle WHERE INTERSECTS(mbr,@bbox)");
-if($circledata->num_rows !==0)  {
-    $circlestarted=false;
-    while($circleinfo=$circledata->fetch_row())  {
-       if($circlestarted) {
-       echo ",\n";
-       }
-      $countries[]= $circleinfo[0];
-      $circlestarted=true;
-      $centre=str_replace(" ",",",str_replace(")","]",str_replace("POINT(","[",$circleinfo[2])));
-    echo "{\n\"base\":$circleinfo[1],\n\"centre\":$centre,\n\"radius\":$circleinfo[3]\n}";
+    //find box approx 555 Km from start pt each way
+    $north=$_POST['lat'] + 5;
+    if($north > 90) {
+    $north=90;
     }
-}
-$circledata->close();
- $countrylist=array_unique($countries);
-if(count($countrylist) > 0) {
- $inlist= "";
- $i=0;
-foreach($countrylist as $country) {
-   if($i >0)  {
-     $inlist.= ",";
+    $south=$_POST['lat'] - 5;
+    if($south  < -90) {
+    $south=-90;
+    }
+    $latcorr=cos(deg2rad($_POST['lat']));
+    if($latcorr > 0)  {   //in case file error gives takeoff at a pole
+     $east= $_POST['lng'] + 5/$latcorr;
+     if($east > 180) {
+     $east= 360-$east;
      }
-     $i++;
-     $inlist.="\"$country\"";
-}
-$countrysql="SELECT source, date_format(updated,'%b %Y') AS showdate FROM countries WHERE country IN($inlist)";
-$countryset=$mysqli->query($countrysql);
-if($countryset->num_rows ===0)  {
-     $textout= "<br>None available for this region";
+     $west= $_POST['lng'] - 5/$latcorr;
+     if($west < -180) {
+     $west= 360 + $west;
      }
-else  {
-     $textout="";
-     while($countrylist=$countryset->fetch_assoc()) {
-            $textout.="<br><a href='http://".$countrylist['source']."'>".$countrylist['source']."</a> updated ".$countrylist['showdate'];
-        }
-  }
-$countryset->close();
-   }
-else  {
-  $textout= "<br>Not available for this region";
-}
-$mysqli->close();
-echo "\n],\n\"country\": \"$textout\"\n}\n";
+    }
+    else {
+    $east=180;
+    $west=-180;
+    }
+  $box="POLYGON(($north $west,$north $east,$south $east,$south $west,$north $west))";
+  $sql="SET @bbox=GeomFromText('".$box."')";
+  $mysqli->query($sql);
+  $wherepolygons="INTERSECTS(outline,@bbox)";
+  $wherecircles="INTERSECTS(mbr,@bbox)";
+  $retval['polygons']=getpolygons($wherepolygons);
+  $retval['circles']=getcircles($wherecircles);
+  echo json_encode($retval,JSON_NUMERIC_CHECK);
+  $mysqli->close();
 ?>

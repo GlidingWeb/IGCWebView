@@ -1,9 +1,8 @@
 
 /* global L */
 /* global jQuery */
-(function ($) {
+var ns = (function ($) {
     'use strict';
-
     var presenter = require('./presenter.js');
     var mapWrapper = require('./views/mapcontrol.js');
 
@@ -18,6 +17,24 @@
     };
     var task = null;
     var sectordefs = {};
+    var mapControl;
+
+
+    function loadAirspace() {
+        $.post("getairspace.php",
+            {
+                lat: igcFile.latLong[0][0],
+                lng: igcFile.latLong[0][1]
+            },
+            function (data, status) {
+                if (status === 'success') {
+                    mapControl.setAirspace(data);
+                }
+                else {
+                    alert("Airspace load failed");
+                }
+            }, "json");
+    }
 
     function showSectors() {
         $('#startrad').val(sectordefs.startrad);
@@ -126,7 +143,7 @@
         var sectorLimits = [];
         for (i = 1; i < task.coords.length; i++) {
             heading = topoint(task.coords[i - 1], task.coords[i]).bearing;
-            legheadings.push(heading);;
+            legheadings.push(heading);
         }
         for (i = 0; i < task.coords.length; i++) {
             var limits = {};
@@ -159,14 +176,6 @@
         return sectorLimits;
     }
 
-    function checksects() {
-        var min = 70;
-        var max = 190;
-        var target = 340;
-        alert(min - target);
-        alert((target > min) || ((min - target) > 180)) && ((target < max) || ((target - max) > 180));
-    }
-
     function checksector(target, comparison) {
         var min = comparison.min;
         var max = comparison.max;
@@ -197,8 +206,11 @@
         var distanceToNext;
         var currentDistance;
         var startIndexLatest;
+        var startTime;
+        var finishTime;
+        var finishAlt;
         var bestSoFar = 0;
-        var curLeg = -1
+        var curLeg = -1;
         var sectorLimits = getSectorLimits();
         do {
             if (!(flying)) {
@@ -302,13 +314,13 @@
             switch (j) {
                 case 0:
                     legName = "<br/><br/>Start: ";
-                    var startTime = timestamp;
+                    startTime = timestamp;
                     var startAlt = tpAlt;
                     break;
                 case task.coords.length - 1:
                     legName = "<br/>Finish: ";
-                    var finishTime = timestamp;
-                    var finishAlt = tpAlt;
+                    finishTime = timestamp;
+                    finishAlt = tpAlt;
                     break;
                 default:
                     legName = "<br/>TP" + j + ": ";
@@ -556,7 +568,7 @@
         var taskdata = {
             coords: [],
             name: []
-        }
+        };
         $("#requestdata :input[type=text]").each(function () {
             input = $(this).val().replace(/ /g, '');
             if (input.length > 0) {
@@ -690,7 +702,6 @@
                 coords: [],
                 name: []
             };
-            //For now, ignore takeoff and landing
             for (i = 1; i < igcFile.taskpoints.length - 1; i++) {
                 pointdata = getPoint(igcFile.taskpoints[i]);
                 if (pointdata.message === "OK") {
@@ -707,15 +718,28 @@
         }
     }
 
-    function displayIgc(mapControl) {
-
+    function showImported(taskinfo) {
+        var tpoints = {
+            name: [],
+            coords: []
+        };
+        var i;
+        $("#requestdata :input[type=text]").each(function () {
+            $(this).val("");
+        });
         clearTask(mapControl);
-        //check for user entered task- must be entry in start and finish
-        if ($('#start').val().trim() && $('#finish').val().trim()) {
-            parseUserTask();
+        for (i = 0; i < taskinfo.tpname.length; i++) {
+            tpoints.name.push(taskinfo.tpname[i]);
+            tpoints.coords.push(L.latLng(taskinfo.lat[i], taskinfo.lng[i]));
         }
-        //if user defined task is empty or malformed
-        if (task === null) {
+        task = maketask(tpoints);
+        showTask(mapControl);
+        $('#clearTask').show();
+    }
+
+    function displayIgc(mapControl) {
+        if ($("input[name=tasksource][value=infile]").prop('checked')) {
+            clearTask(mapControl);
             task = getFileTask(igcFile);
         }
 
@@ -727,12 +751,13 @@
         // setting the zoom level of the map or plotting the graph.
         $('#igcFileDisplay').show();
         mapControl.addTrack(igcFile.latLong);
+        loadAirspace();
         //Barogram is now plotted on "complete" event of timezone query
         gettimezone(igcFile, mapControl);
         // Set airspace clip altitude to selected value and show airspace for the current window
-        mapControl.updateAirspace(Number($("#airclip").val()));
+        //mapControl.updateAirspace(Number($("#airclip").val()));
         //Enable automatic update of the airspace layer as map moves or zooms
-        mapControl.activateEvents();
+        //mapControl.activateEvents();
         $('#timeSlider').prop('max', igcFile.recordTime.length - 1);
     }
 
@@ -751,11 +776,15 @@
         require('./views/headers.js')
             .setup(presenter);
 
+        var planWindow = null;
+
         presenter.on(eventTypes.error, function (errorMessage) {
             $('#errorMessage').text(errorMessage);
         });
 
         var mapControl = mapWrapper.createMapControl('map');
+        mapControl.setClipAlt($('#airclip').val());
+
         
         // Temporary workaround until refactoring complete
         presenter.on(eventTypes.igcLoaded, function (igc) {
@@ -796,9 +825,9 @@
         } else {
             altitudeConversionFactor = 1.0;
         }
-
+        window.name = "igcview";
         setSectorDefaults();
-
+        $("input[name=tasksource][value=infile]").prop('checked', true);
         $('#fileControl').change(function () {
             if (this.files.length > 0) {
                 var reader = new FileReader();
@@ -870,14 +899,6 @@
             $("#requestdata :input[type=text]").each(function () {
                 $(this).val("");
             });
-            clearTask(mapControl);
-            if (igcFile) {
-                task = getFileTask(igcFile);
-            }
-            if (task) {
-                showTask(mapControl);
-            }
-            $('#clearTask').hide();
         });
 
         $('#zoomtrack').click(function () {
@@ -898,7 +919,8 @@
             clearTask(mapControl);
             parseUserTask();
             showTask(mapControl);
-            $('#clearTask').show();
+            $('#taskentry').hide();
+            $('#task').show();
         });
 
         $('#barogram').on('plotclick', function (event, pos, item) {
@@ -930,7 +952,7 @@
             if (realityCheck()) {
                 $('#sectors').hide();
                 setSectors();
-                if (task != null) {
+                if (task !== null) {
                     mapControl.zapTask();
                     mapControl.addTask(task.coords, task.labels, sectordefs);
                 }
@@ -943,6 +965,31 @@
         $('#tpdefaults').click(function () {
             setSectorDefaults();
             showSectors();
+        });
+
+        $('input[type=radio][name=tasksource]').change(function () {
+            switch (this.value) {
+                case "infile":
+                    $('#taskentry').hide();
+                    clearTask(mapControl);
+                    task = getFileTask(igcFile);
+                    showTask(mapControl);
+                    $('#task').show();
+                    break;
+                case "user":
+                    $('#task').hide();
+                    $('#taskentry').show();
+                    break;
+                case "xcplan":
+                    if ((!(planWindow)) || (planWindow.closed)) {
+                        planWindow = window.open("../TaskMap/xcplan.php?version=world", "_blank");
+                    }
+                    planWindow.focus();
+                    break;
+                case "nix":
+                    clearTask(mapControl);
+                    task = null;
+            }
         });
 
         var storedAltitudeUnit = '',
@@ -968,5 +1015,10 @@
         }
         showSectors();
     });
-
+    return {
+        importTask: function (taskinfo) {
+            showImported(taskinfo);
+            return "Task entered successfully";
+        }
+    }
 } (jQuery));
