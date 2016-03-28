@@ -614,7 +614,7 @@
                 //var localdate = new Date(flightdate.getTime() + timezone.offset);
                 //$('#datecell').text(displaydate(localdate));
                 barogramPlot = plotBarogram(igcFile);
-                updateTimeline(0, mapControl);
+                updateTimeline(0);
             }
         });
     }
@@ -665,19 +665,9 @@
         return baro;
     }
 
-    function updateTimeline(timeIndex, mapControl) {
-        var currentPosition = igcFile.latLong[timeIndex];;
-        var positionText = pointDescription(L.latLng(currentPosition));
-        var unitName = $('#altitudeUnits').val();
+    function updateTimeline(timeIndex) {
         //add in offset from UTC then convert back to UTC to get correct time in timezone!
         var adjustedTime = new Date(igcFile.recordTime[timeIndex].getTime() + timezone.offset);
-        $('#timePositionDisplay').html(adjustedTime.getUTCHours() + ':' + pad(adjustedTime.getUTCMinutes()) + ':' + pad(adjustedTime.getSeconds()) + " " + timezone.zoneabbr + '; ' +
-            (igcFile.pressureAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
-            unitName + ' (barometric) / ' +
-            (igcFile.gpsAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
-            unitName + ' (GPS); ' +
-            positionText + " : " + timeIndex);
-        mapControl.setTimeMarker(timeIndex);
 
         barogramPlot.lockCrosshair({
             x: adjustedTime.getTime(),
@@ -772,6 +762,33 @@
             igcFile = igc;
             displayIgc(mapControl);
         });
+        
+        // Temporary workaround until refactoring complete.
+        // TODO: Move into separate map view file after the task editing
+        // functionality has been refactored.
+        
+        var updatePositionDisplay = function (presenter) {
+            var pos = presenter.getCurrentPosition();
+            var unit = presenter.getAltitudeUnit();
+            var posDisplay = pos.timeOfMeasurement.format('HH:mm:ss')
+                + ' ' + pos.timeZoneAbbreviation + '; '
+                + pos.pressureAltitude.toFixed(0)
+                + ' ' + unit + ' (barometric); '
+                + pos.gpsAltitude.toFixed(0)
+                + ' ' + unit + ' (GPS); '
+                + pointDescription({ lat: pos.latitude, lng: pos.longitude });
+
+            $('#timePositionDisplay').html(posDisplay);
+        };
+
+        presenter.on(eventTypes.timeIndexChanged, function (timeIndex, source) {
+            mapControl.setTimeMarker(timeIndex);
+            updatePositionDisplay(presenter);
+        });
+
+        presenter.on(eventTypes.altitudeUnitChanged, function (unit) {
+            updatePositionDisplay(presenter);
+        });
 
         var altitudeUnit = $('#altitudeUnits').val();
         if (altitudeUnit === 'feet') {
@@ -806,6 +823,9 @@
         });
 
         $('#altitudeUnits').change(function (e, raisedProgrammatically) {
+            presenter.setAltitudeUnit($(this).val());
+            
+            // TODO: Remove.
             var altitudeUnit = $(this).val();
             if (altitudeUnit === 'feet') {
                 altitudeConversionFactor = 3.2808399;
@@ -814,7 +834,7 @@
             }
             if (igcFile !== null) {
                 barogramPlot = plotBarogram();
-                updateTimeline($('#timeSlider').val(), mapControl);
+                updateTimeline($('#timeSlider').val());
             }
 
             if (!raisedProgrammatically) {
@@ -827,10 +847,14 @@
         // as the range input is dragged.
         $('#timeSlider').on('input', function () {
             var t = parseInt($(this).val(), 10);
-            updateTimeline(t, mapControl);
+            presenter.setTimeIndex(t, 'slider');
+            // TODO: Remove after refactor
+            updateTimeline(t);
         });
         $('#timeSlider').on('change', function () {
             var t = parseInt($(this).val(), 10);
+            presenter.setTimeIndex(t, 'slider');
+            // TODO: Remove after refactor
             updateTimeline(t, mapControl);
         });
 
@@ -879,7 +903,9 @@
 
         $('#barogram').on('plotclick', function (event, pos, item) {
             if (item) {
-                updateTimeline(item.dataIndex, mapControl);
+                presenter.setTimeIndex(item.dataIndex, 'barogram');
+                // TODO: Remove after refactor
+                updateTimeline(item.dataIndex);
                 $('#timeSlider').val(item.dataIndex);
             }
         });

@@ -42,6 +42,10 @@
         
         name: function() {
             return timezone.zonename;
+        },
+        
+        abbreviation: function() {
+            return timezone.zoneabbr
         }
     };
 } ());
