@@ -18,5 +18,8 @@
   "homepage": "https://github.com/GlidingWeb/IGCWebView#readme",
   "devDependencies": {
     "webpack": "^1.12.14"
+  },
+  "dependencies": {
+    "moment": "^2.12.0"
   }
 }

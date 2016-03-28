@@ -611,8 +611,8 @@
             },
             complete: function () {
                 //Local date may not be the same as UTC date
-                var localdate = new Date(flightdate.getTime() + timezone.offset);
-                $('#datecell').text(displaydate(localdate));
+                //var localdate = new Date(flightdate.getTime() + timezone.offset);
+                //$('#datecell').text(displaydate(localdate));
                 barogramPlot = plotBarogram(igcFile);
                 updateTimeline(0, mapControl);
             }

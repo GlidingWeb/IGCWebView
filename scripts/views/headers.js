@@ -8,7 +8,7 @@
     module.exports = {
         setup: function (presenter) {
             presenter.on(eventTypes.igcLoaded, function (igc) {
-                var headerTable = $('#headerInfo');
+                var headerTable = $('#headers');
                 
                 headerTable.html('');
                 if (igc.headers) {
@@ -21,6 +21,8 @@
                     });
                 }
                 
+                $('#datecell').text(igc.localTime[0].format('ddd DD MMM Y'));
+                    
                 $('#flightInfo').show();
             });
         }

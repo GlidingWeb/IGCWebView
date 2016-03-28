@@ -1,6 +1,7 @@
 module.exports = (function () {
     'use strict';
 
+    var moment = require('moment');
     var eventTypes = require('./eventTypes.js');
     var parser = require('./model/parseigc.js');
     var timezone = require('./model/timezone.js');
@@ -25,8 +26,12 @@ module.exports = (function () {
                     igcFile.latLong[0],
                     igcFile.recordTime[0],
                     function (tz) {
-                        console.log('Time zone: ' + tz.zonename);
-                        console.log('UTC offset: ' + tz.offset);
+                        // Convert time offset from milliseconds to minutes.
+                        var offsetMinutes = tz.offset / 60.0e3;
+                        
+                        igcFile.localTime = igcFile.recordTime.map(function(t){
+                            return moment(t).utcOffset(offsetMinutes);
+                        });
                         trigger(eventTypes.igcLoaded, igcFile);
                     });
             }
