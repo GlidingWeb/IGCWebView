@@ -65,10 +65,17 @@ npm install -g webpack
 
 ## Build process
 
-### For development
+Open a command prompt in the directory where you cloned the
+Git repository and type:
+```
+npm install
+```
+to download the required third-party JavaScript libraries using the
+Node package manager. The following libraries will be installed:
 
-Open a command prompt, navigate to the directory where you cloned the
-Git repository, and simply type:
+* [Moment.js](http://momentjs.com/) - Displays formatted dates and times with any given offset from UTC.
+
+You can then build IGCWebView for debugging simply by typing:
 ```
 webpack
 ```
@@ -83,9 +90,8 @@ code files changes, open a separate terminal window and type:
 webpack --watch
 ```
 
-### For production
-
-To minify the JavaScript for production use, type:
+For production use, the JavaScript should ideally be minified (removing all white space)
+in order to reduce its size. This can be achieved by running:
 ```
 webpack -p
 ```
