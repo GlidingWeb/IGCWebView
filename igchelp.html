@@ -41,10 +41,11 @@
         <p>
             You can move around and zoom in or out on the map- if you've ever used Google Earth it works the same way. Click and drag
             to move; zoom in using the "+-" top left, scroll wheel, or on a tablet, "pinching". To reduce clutter you can
-            control the airspace clip altitude, or lose the airspace display altogether. Click on the icon top right on the
-            map to add or remove display of task or track, or to switch between map and satellite picture background.
+            control the airspace clip altitude, or lose the airspace display altogether. 
         </p>
-
+        <p>
+              By default, the display shows the Google Maps terrain view.  This works well in flatlands (you can see where the ridges are), but can be confusing in the mountains.  If you go to "Map" on the top left hand corner of the map, you can uncheck "Terrain"; the display will then revert to the standard road map.
+        </p>
         <h2>Moving round the track</h2>
         <p>
             Use the slider control below the map to move the aircraft icon round the track. The text below the map will give the time
@@ -64,13 +65,13 @@
            Users in the UK will find it easy to enter BGA trigraphs to define a task; for users elsewhere entering latitudes and longitudes by hand will work, but is a pain.  If you have a suitable waypoint file available (".cup" or ".dat" format), an easy alternative is to mark out your task in XCWebPlan, and import it.  The process is simpler than it looks provided you do it as per instructions:
            <ol>
            <li>Click on the "Load" button in the "Task user entry" section.  A copy of XCWebPlan will open in another tab in your browser.</li>
-           <li>In XCWebPlan accept the airspace disclaimer and then select the waypoint file of your choice.</li>
+           <li>In XCWebPlan accept the airspace disclaimer and then select the waypoint file of your choice.  This must be on your PC or device.</li>
            <li>Enter your task by clicking on the map.  If you haven't used XCWebPlan before, consult the help file that comes with it.</li>
            <li>Once you have entered the task a "Copy task" button will appear bottom right.  Click on it and you should get a message saying the task has been copied over.</li>
            <li>Switch back to the "XCWebView" tab, and you will see your new task entered.</li>
            <li>You can repeat the process as often as you like by simply switching back to the same tab with XCWebPlan on it.</li>
            </ol>
-           Please note the process will only work if done as above; because there are very reasonable limitations on interaction between web pages for security reasons, it's a bit fiddly.  In particular, it will only work if you open the copy of XCWebPlan from the "Load" button- if it's opened by another route it won't recognise what it's supposed to be talking to (and you won't see the "copy task" button).  Also you will have to switch between tabs manually;  you won't see what's happening in the tab behind the current one, although we've provided messages which will hopefully tell you.</p>
+           Please note the process will only work if done as above; because there are very reasonable limitations on interaction between web pages for security reasons, it's a bit fiddly.  In particular, it will only work if you open the copy of XCWebPlan from inside IGCWebview- if it's opened by another route it won't recognise what it's supposed to be talking to (and you won't see the "copy task" button). Another limitation is that  you will have to switch between tabs manually;  you won't see what's happening in the tab behind the current one, although we've provided messages which will hopefully tell you.</p>
         </p>
         
          <h2>Checking your performance</h2>
@@ -90,6 +91,11 @@
            <li>Finish: A line of 1 Km radius at right angles to the last leg centred on the finish point.</li>
            </ul>
            If you want something else you can click on the "Configure TP sectors" button make changes, then click "Apply".  "Restore defaults" simply restores the values above, you still need to "apply" afterwards.  The values entered will always stick until you make a further change or close the page.  If you want them to apply next time you load the page, tick the "Save" box before "apply".
+        </p>
+        
+        <h2>A word about controlled airspace</h2>
+        <p>
+        The disclaimer is there for a reason.   We maintain the files as up to date as we can; our principal source of data is <a href="http://soaringweb.org" target="_blank">soaringweb.org</a>, but we also use some other sources.  There are some countries where we have no data at all.  The data is put together by different people, with their own criteria of what to include or omit.   As pilots we have to deal with a number of variations of airspace, apart from the normal classes A to G we have to worry about parachute zones, military air traffic zones, transponder mandatory zones, radio mandatory zones  and prohibited and danger zones which may or may not have designated activity times and maybe or maybe not accessible with radio clearance.   Rather that try to cope with all that on a global basis, we've provided you with some lines on the map which hopefully are the same as those on your chart, and credit you with knowing what you are doing.  Always check the chart before you fly!
         </p>
         
         <h2>About IGCWebview</h2>

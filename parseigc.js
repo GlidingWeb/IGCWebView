@@ -122,10 +122,13 @@ function parseIGC(igcFile) {
             longitude = -longitude;
         }
 
-        return [latitude, longitude];
+        return {
+                        lat: latitude, 
+                        lng: longitude
+           };
     }
 
-    function parsePosition(positionRecord, model, flightDate) {
+    function parsePosition(positionRecord, model) {
         // Regex to match position records:
         // Hours, minutes, seconds, latitude, N or S, longitude, E or W,
         // Fix validity ('A' = 3D fix, 'V' = 2D or no fix),
@@ -133,7 +136,7 @@ function parseIGC(igcFile) {
         // Latitude and longitude are in degrees and minutes, with the minutes
         // value multiplied by 1000 so that no decimal point is needed.
         //                      hours    minutes  seconds  latitude    longitude        press alt  gps alt
-        var positionRegex = /^B([\d]{2})([\d]{2})([\d]{2})([\d]{7}[NS][\d]{8}[EW])([AV])([-\d][\d]{4})([-\d][\d]{4})/;
+       var positionRegex = /^B([\d]{2})([\d]{2})([\d]{2})([\d]{7}[NS][\d]{8}[EW])([AV])([-\d][\d]{4})([-\d][\d]{4})/;
         var positionMatch = positionRecord.match(positionRegex);
         if (positionMatch) {
             // Convert the time to a date and time. Start by making a clone of the date
@@ -146,11 +149,23 @@ function parseIGC(igcFile) {
                 model.recordTime[0] > positionTime) {
                 positionTime.setDate(flightDate.getDate() + 1);
             }
-          var curPosition= parseLatLong(positionMatch[4]);
-          if((curPosition[0] !==0) && (curPosition[1] !==0)) {
+        if(positionMatch[4] !=="0000000N00000000W") {
+           var  position=parseLatLong(positionMatch[4]);
+            if(position.lat > model.bounds.north) {
+               model.bounds.north=position.lat;
+            }
+             if(position.lat < model.bounds.south) {
+                model.bounds.south=position.lat;
+           }
+             if(position.lng > model.bounds.east) {
+                model.bounds.east=position.lng;
+            }
+             if(position.lng < model.bounds.west) {
+                model.bounds.west=position.lng;
+            }
             return {
                 recordTime: positionTime,
-                latLong: curPosition,
+                latLong: parseLatLong(positionMatch[4]),
                 pressureAltitude: parseInt(positionMatch[6], 10),
                 gpsAltitude: parseInt(positionMatch[7], 10)
             };
@@ -169,13 +184,21 @@ function parseIGC(igcFile) {
     // Declare the model object that is to be returned;
     // this contains the position and altitude data and the header
     // values.
+    //Bounds for the track have been added Google has no function to calculate bounds for a polygon
+    //Faster to do it here.
     var model = {
         headers: [],
         recordTime: [],
         latLong: [],
         pressureAltitude: [],
         gpsAltitude: [],
-        taskpoints: []
+        taskpoints: [],
+        bounds: {
+            south: 90,
+            west: 180,
+            north: -90,
+            east: -180
+        }
     };
 
     // The first line should begin with 'A' followed by
@@ -232,5 +255,12 @@ function parseIGC(igcFile) {
                 break;
         }
     }
+    //allow for flights over 180 deg. longitude
+    if(model.bounds.east > 180) {
+        model.bounds.east = bounds.east-360;
+    }
+    if(model.bounds.west < -180) {
+        model.bounds.west=360 + bounds.west;
+     }
     return model;
 }

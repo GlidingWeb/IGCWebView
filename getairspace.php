@@ -71,12 +71,12 @@ $countries=array(
     
 require_once("../db_inc.php");
 $mysqli=new mysqli($dbserver,$username,$password,$database);
-    //find box approx 555 Km from start pt each way
-    $north=$_POST['lat'] + 5;
+    //find box approx 333 Km from start pt each way
+    $north=$_POST['lat'] + 3;
     if($north > 90) {
     $north=90;
     }
-    $south=$_POST['lat'] - 5;
+    $south=$_POST['lat'] - 3;
     if($south  < -90) {
     $south=-90;
     }

@@ -1,8 +1,8 @@
-/* global L */
 /* global jQuery */
 var ns = (function($) {
   'use strict';
   var igcFile = null;
+  var earthrad = 6378; //  Earth radius km
   var barogramPlot = null;
   var altitudeConversionFactor = 3.2808399; // Conversion from metres to required units
   var timezone = {
@@ -15,16 +15,16 @@ var ns = (function($) {
   var sectordefs = {};
   var mapControl;
 
-
-  function loadAirspace() {
+  function loadAirspace(midpoint) {
     $.post("getairspace.php",
       {
-        lat: igcFile.latLong[0][0],
-        lng: igcFile.latLong[0][1]
+        lat: midpoint.lat,
+        lng: midpoint.lng
       },
       function(data, status) {
         if (status === 'success') {
           mapControl.setAirspace(data);
+          mapControl.updateAirspace(Number($("#airclip").val()));
         }
         else {
           alert("Airspace load failed");
@@ -92,8 +92,24 @@ var ns = (function($) {
     }
   }
 
+  function targetPoint(start, distance, bearing) {
+    var lat1 = start.lat * Math.PI / 180;
+    var lng1 = start.lng * Math.PI / 180;
+    var radbrng = bearing * Math.PI / 180;
+    var lat2 = Math.asin(Math.sin(lat1) * Math.cos(distance / earthrad) + Math.cos(lat1) * Math.sin(distance / earthrad) * Math.cos(radbrng));
+    var lng2 = lng1 + Math.atan2(Math.sin(radbrng) * Math.sin(distance / earthrad) * Math.cos(lat1), Math.cos(distance / earthrad) - Math.sin(lat1) * Math.sin(lat2));
+    var retlat = lat2 * 180 / Math.PI;
+    var retlng = lng2 * 180 / Math.PI;
+    retlng = (retlng + 540) % 360 - 180;
+    return {
+      lat: retlat,
+      lng: retlng
+    };
+  }
+
+
+
   function topoint(start, end) {
-    var earthrad = 6378; //  Earth radius km
     var degLat1;
     var degLng1;
     var degLat2;
@@ -208,6 +224,7 @@ var ns = (function($) {
     var bestSoFar = 0;
     var curLeg = -1;
     var sectorLimits = getSectorLimits();
+    var startAlt;
     do {
       if (!(flying)) {
         distInterval = topoint(igcFile.latLong[i - 1], igcFile.latLong[i]);
@@ -312,7 +329,7 @@ var ns = (function($) {
         case 0:
           legName = "<br/><br/>Start: ";
           startTime = timestamp;
-          var startAlt = tpAlt;
+          startAlt = tpAlt;
           break;
         case task.coords.length - 1:
           legName = "<br/>Finish: ";
@@ -343,7 +360,7 @@ var ns = (function($) {
         var chickenDate = new Date(igcFile.recordTime[bestIndex].getTime() + timezone.offset);
         $('#taskcalcs').append("<br/><br/>\"GPS Landing\" at: " + chickenDate.getUTCHours() + ":" + pad(chickenDate.getUTCMinutes()));
         mapControl.pushPin(igcFile.latLong[bestIndex]);
-        $('#taskcalcs').append("<br/>Position: " + pointDescription(L.latLng(igcFile.latLong[bestIndex])));
+        $('#taskcalcs').append("<br/>Position: " + pointDescription(igcFile.latLong[bestIndex]));
         $('#taskcalcs').append("<br/>Scoring distance: " + bestSoFar.toFixed(2) + " Km");
       }
     }
@@ -371,6 +388,57 @@ var ns = (function($) {
     return retval;
   }
 
+  function drawSector(task, tpno, sectordefs, mapControl) {
+    var interval = 5;
+    var j;
+    var polydef = [];
+    var bearingOut = (task.bearing[tpno + 1] + 180) % 360;
+    var bisector = task.bearing[tpno] + (bearingOut - task.bearing[tpno]) / 2;
+    if (Math.abs(bearingOut - task.bearing[tpno]) > 180) {
+      bisector = (bisector + 180) % 360;
+    }
+    polydef.push(task.coords[tpno]);
+    var sector_startangle = (bisector - sectordefs.sector_angle / 2 + 360) % 360;
+    polydef.push(targetPoint(task.coords[tpno], sectordefs.sector_rad, sector_startangle));
+    var sector_endangle = (bisector + sectordefs.sector_angle / 2 + 360) % 360;
+    var interpoints = sectordefs.sector_angle / interval - 1;
+    var azi = sector_startangle;
+    for (j = 1; j < interpoints; j++) {
+      azi += interval;
+      polydef.push(targetPoint(task.coords[tpno], sectordefs.sector_rad, azi));
+    }
+    polydef.push(targetPoint(task.coords[tpno], sectordefs.sector_rad, sector_endangle));
+    polydef.push(task.coords[tpno]);
+    mapControl.drawTpSector(polydef);
+  }
+
+  function drawStartFin(point, radius, bearing) {
+    var brng1 = (bearing + 270) % 360;
+    var brng2 = (bearing + 90) % 360;
+    var drawStart = targetPoint(point, radius, brng1);
+    var drawEnd = targetPoint(point, radius, brng2);
+    mapControl.drawTargetLine(drawStart, drawEnd);
+  }
+
+  function addSectors(task, sectordefs, mapControl) {
+    var j;
+    drawStartFin(task.coords[0], sectordefs.startrad, task.bearing[1], mapControl);
+    if (sectordefs.finishtype === 'line') {
+      drawStartFin(task.coords[task.coords.length - 1], sectordefs.finrad, task.bearing[task.coords.length - 1], mapControl);
+    }
+    else {
+      mapControl.drawTpCircle(task.coords[task.coords.length - 1], sectordefs.tprad);
+    }
+    for (j = 1; j < task.coords.length - 1; j++) {
+      if (sectordefs.use_barrel) {
+        mapControl.drawTpCircle(task.coords[j], sectordefs.tprad);
+      }
+      if (sectordefs.use_sector) {
+        drawSector(task, j, sectordefs, mapControl);
+      }
+    }
+  }
+
   function showTask(mapControl) {
     var i;
     var pointlabel;
@@ -392,7 +460,8 @@ var ns = (function($) {
       $('#tasklength').text("Task length: " + task.distance.toFixed(1) + " Km");
       $('#task').show();
     }
-    mapControl.addTask(task.coords, task.labels, sectordefs);
+    mapControl.addTask(task);
+    addSectors(task, sectordefs, mapControl);
     bindTaskButtons(mapControl);
   }
 
@@ -425,40 +494,43 @@ var ns = (function($) {
     var i;
     var j = 1;
     var distance = 0;
-    var leglength;
+    var leginfo;
     var names = [];
     var labels = [];
     var coords = [];
     var descriptions = [];
     var legsize = [];
+    var bearing = [];
     names[0] = points.name[0];
     labels[0] = "Start";
     coords[0] = points.coords[0];
     descriptions[0] = pointDescription(points.coords[0]);
     legsize[0] = 0;
+    bearing[0] = 0;
     for (i = 1; i < points.coords.length; i++) {
-      leglength = points.coords[i].distanceTo(points.coords[i - 1]);
+      leginfo = topoint(points.coords[i - 1], points.coords[i]);
       //eliminate situation when two successive points are identical (produces a divide by zero error on display. 
       //To allow for FP rounding, within 30 metres is considered identical.
-      if (leglength > 30) {
+      if (leginfo.distance > 0.03) {
         names[j] = points.name[i];
         coords[j] = points.coords[i];
         descriptions[j] = pointDescription(points.coords[i]);
         labels[j] = "TP" + j;
-        legsize[j] = leglength / 1000;
-        distance += leglength;
+        legsize[j] = leginfo.distance;
+        bearing[j] = leginfo.bearing;
+        distance += leginfo.distance;
         j++;
       }
     }
     labels[labels.length - 1] = "Finish";
-    distance = distance / 1000;
     var retval = {
       names: names,
       labels: labels,
       coords: coords,
       descriptions: descriptions,
       legsize: legsize,
-      distance: distance
+      distance: distance,
+      bearing: bearing
     };
     //Must be at least two points more than 30 metres apart
     if (names.length > 1) {
@@ -475,6 +547,7 @@ var ns = (function($) {
     var matchref;
     var statusmessage = "Fail";
     var count;
+    var coords = {};
     var pointregex = [
       /^([A-Za-z]{2}[A-Za-z0-9]{1})$/,
       /^([A-Za-z0-9]{6})$/,
@@ -522,7 +595,6 @@ var ns = (function($) {
               pointname = matchref[9];
             }
             statusmessage = "OK";
-
             break;
           case 3:
             //hh:mm:ss
@@ -550,10 +622,11 @@ var ns = (function($) {
         }
       }
     }
-
+    coords.lat = latitude;
+    coords.lng = longitude;
     return {
       message: statusmessage,
-      coords: L.latLng(latitude, longitude),
+      coords: coords,
       name: pointname
     };
 
@@ -594,7 +667,7 @@ var ns = (function($) {
     return daynames[timestamp.getUTCDay()] + " " + timestamp.getUTCDate() + " " + monthnames[timestamp.getUTCMonth()] + " " + timestamp.getUTCFullYear();
   }
 
-  //get timezone data from timezonedb.  Via php to avoid cross-domain data request from the browser
+  //get timezone data from google.  Via php to avoid cross-domain data request from the browser
   //Timezone dependent processes run  on file load are here as request is asynchronous
   //If the request fails or times out, silently reverts to default (UTC)
   function gettimezone(igcFile, mapControl) {
@@ -603,20 +676,18 @@ var ns = (function($) {
       url: "gettimezone.php",
       data: {
         stamp: flightdate / 1000,
-        lat: igcFile.latLong[0][0],
-        lon: igcFile.latLong[0][1]
+        lat: igcFile.latLong[0].lat,
+        lon: igcFile.latLong[0].lng
       },
       timeout: 3000,
       method: "POST",
       dataType: "json",
       success: function(data) {
         if (data.status === "OK") {
-          timezone.zonename = data.zoneName;
-          timezone.zoneabbr = data.abbreviation;
-          timezone.offset = 1000 * parseFloat(data.gmtOffset);
-          if (data.dst === "1") {
-            timezone.zonename += ", daylight saving";
-          }
+          timezone.zonename = data.timeZoneId;
+          timezone.zoneabbr = data.timeZoneName.match(/[A-Z]/g).join('');
+          timezone.offset = 1000 * (parseFloat(data.rawOffset) + parseFloat(data.dstOffset));
+          timezone.zonename = data.timeZoneName;
         }
       },
       complete: function() {
@@ -676,8 +747,7 @@ var ns = (function($) {
   }
 
   function updateTimeline(timeIndex, mapControl) {
-    var currentPosition = igcFile.latLong[timeIndex];
-    var positionText = pointDescription(L.latLng(currentPosition));
+    var positionText = pointDescription(igcFile.latLong[timeIndex]);
     var unitName = $('#altitudeUnits').val();
     //add in offset from UTC then convert back to UTC to get correct time in timezone!
     var adjustedTime = new Date(igcFile.recordTime[timeIndex].getTime() + timezone.offset);
@@ -686,8 +756,7 @@ var ns = (function($) {
       unitName + ' (barometric) / ' +
       (igcFile.gpsAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
       unitName + ' (GPS); ' + positionText);
-    mapControl.setTimeMarker(timeIndex);
-
+    mapControl.setTimeMarker(igcFile.latLong[timeIndex]);
     barogramPlot.lockCrosshair({
       x: adjustedTime.getTime(),
       y: igcFile.pressureAltitude[timeIndex] * altitudeConversionFactor
@@ -726,25 +795,21 @@ var ns = (function($) {
   }
 
   function showImported(taskinfo) {
-    var tpoints = {
-      name: [],
-      coords: []
-    };
-    var i;
+
     $("#requestdata :input[type=text]").each(function() {
       $(this).val("");
     });
     clearTask(mapControl);
-    for (i = 0; i < taskinfo.tpname.length; i++) {
-      tpoints.name.push(taskinfo.tpname[i]);
-      tpoints.coords.push(L.latLng(taskinfo.lat[i], taskinfo.lng[i]));
-    }
-    task = maketask(tpoints);
+    task = maketask(taskinfo);
     showTask(mapControl);
     $('#clearTask').show();
   }
 
   function displayIgc(mapControl) {
+    //Now done first.  Getting time zone and plotting graph is asyncronous, so do as soon a possible.
+    gettimezone(igcFile, mapControl);
+    //set bounds for map and get centre of task area
+    var taskcentre = mapControl.setBounds(igcFile.bounds);
     if ($("input[name=tasksource][value=infile]").prop('checked')) {
       clearTask(mapControl);
       task = getFileTask(igcFile);
@@ -765,18 +830,12 @@ var ns = (function($) {
       );
     }
     $('#flightInfo').show();
-    // Reveal the map and graph. We have to do this before
-    // setting the zoom level of the map or plotting the graph.
-    $('#igcFileDisplay').show();
+    //map won't display correctly if initialised in a <div> with 'display:none'.  Works OK for 'visibility: hidden'.
+    $('#igcFileDisplay').css('visibility', 'visible');
     mapControl.addTrack(igcFile.latLong);
-    loadAirspace();
-    //Barogram is now plotted on "complete" event of timezone query
-    gettimezone(igcFile, mapControl);
-    // Set airspace clip altitude to selected value and show airspace for the current window
-    //mapControl.updateAirspace(Number($("#airclip").val()));
-    //Enable automatic update of the airspace layer as map moves or zooms
-    //mapControl.activateEvents();
+    loadAirspace(taskcentre);
     $('#timeSlider').prop('max', igcFile.recordTime.length - 1);
+    document.getElementById("timeSlider").focus();
   }
 
   function storePreference(name, value) {
@@ -790,8 +849,7 @@ var ns = (function($) {
   }
 
   $(document).ready(function() {
-    mapControl = createMapControl('map');
-    mapControl.setClipAlt($('#airclip').val());
+    mapControl = createMapControl();
     var planWindow = null;
     var altitudeUnit = $('#altitudeUnits').val();
     if (altitudeUnit === 'feet') {
@@ -926,7 +984,8 @@ var ns = (function($) {
         setSectors();
         if (task !== null) {
           mapControl.zapTask();
-          mapControl.addTask(task.coords, task.labels, sectordefs);
+          mapControl.addTask(task);
+          addSectors(task, sectordefs, mapControl);
         }
         if ($('#savesectors').prop("checked")) {
           storePreference("sectors", JSON.stringify(sectordefs));
@@ -959,6 +1018,7 @@ var ns = (function($) {
           planWindow.focus();
           break;
         case "nix":
+          $('#taskentry').hide();
           clearTask(mapControl);
           task = null;
       }

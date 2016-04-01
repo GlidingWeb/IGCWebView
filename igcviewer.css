@@ -150,7 +150,7 @@ h3 {
 
 #igcFileDisplay {
     clear: both;
-    display: none;
+   visibility: visible;
 }
 
 table#headerInfo {
