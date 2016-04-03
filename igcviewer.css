@@ -10,9 +10,11 @@ h1  {
     text-align: center;
 }
 
-h2 {
-    display: inline;
+h3 {
+     text-align: center;
+     font-size: 1.2em;
 }
+
 #requestdata {
      line-height: 2.5em;
 }
@@ -64,10 +66,10 @@ h2 {
     white-space: nowrap;
 }
 
-  #declaration {
-    float: right;
-    }
-
+    input[name="tasksource"] {
+    margin-right: 40px;
+}
+    
 @media print, screen and (max-width: 1100px) {
  div.halfwidth   {
         display: block;
@@ -75,6 +77,13 @@ h2 {
         margin-left: auto;
       margin-right: auto;
     }   
+    
+    h2 {
+        display: inline-block;
+        height: 35px;
+        margin-top: 5px;
+        margin-bottom: 5px;
+    }
     
     button.toggle {
         float:right;
@@ -148,7 +157,7 @@ table#headerInfo {
     border-spacing: 0.1em ;
 }
 
-#task {
+#task, #taskentry  {
    display: none;
    width: 100%;
 }
@@ -164,7 +173,55 @@ display: none;
 
 #flightInfo  {
    display: none;
+   float: right;
    margin-bottom: 20px;
+   padding-top: 20px;
+}
+
+#taskdata  {
+  display: none;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 18em;
+    height: 350px;
+    padding: 15px;
+    margin: auto;
+     border-style: solid;
+     border-width: 2px;
+     overflow: auto;
+   text-align: center;
+  z-index: 2000;
+  background-color: white;
+}
+
+#sectors  {
+  display: none;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 18em;
+    height: 350px;
+    padding: 15px;
+    margin: auto;
+     border-style: solid;
+     border-width: 2px;
+     overflow: auto;
+     font-size: 0.9em;
+  z-index: 2000;
+  background-color: white;
+}
+
+#sectors input[type='text'] {
+   width: 3em;
+}
+
+#setsectors {
+float: right;
 }
 
 @-ms-viewport  {
