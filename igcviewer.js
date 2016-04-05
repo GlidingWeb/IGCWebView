@@ -206,6 +206,7 @@ var ns = (function($) {
     var finishTime;
     var finishAlt;
     var bestSoFar = 0;
+    var startIndexBest;
     var curLeg = -1;
     var sectorLimits = getSectorLimits();
     do {
@@ -228,7 +229,7 @@ var ns = (function($) {
         else {
           if (curLeg === 0) {
             curLeg = 1;
-            tpindices[0] = i;
+            startIndexLatest=i;
             distanceToNext = task.legsize[1];
             timestamp = igcFile.recordTime[i].getTime();
           }
@@ -272,7 +273,7 @@ var ns = (function($) {
           currentDistance = distanceToNext - nextstatus.distance;
           if (currentDistance > bestSoFar) {
             bestSoFar = currentDistance;
-            startIndexLatest = tpindices[0];
+            tpindices[0]=startIndexLatest;
             bestIndex = i;
           }
         }
