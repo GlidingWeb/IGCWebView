@@ -1,0 +1,8 @@
+// Workspace settings for Microsoft Visual Studio Code
+{
+    "files.exclude": {
+        "**/*.js.map": true,
+        "bundle.js": true,
+        "node_modules/": true
+    }
+}
