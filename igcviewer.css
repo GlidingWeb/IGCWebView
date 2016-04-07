@@ -150,7 +150,7 @@ h3 {
 
 #igcFileDisplay {
     clear: both;
-   visibility: visible;
+   visibility: hidden;
 }
 
 table#headerInfo {
@@ -220,9 +220,34 @@ display: none;
    width: 3em;
 }
 
-#setsectors {
+button.floatright {
 float: right;
 }
+
+#setenl  {
+  display: none;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 18em;
+    height: 350px;
+    padding: 15px;
+    margin: auto;
+     border-style: solid;
+     border-width: 2px;
+     overflow: auto;
+     font-size: 0.9em;
+  z-index: 2000;
+  background-color: white;
+}
+
+#enlthreshold, #enltime  {
+width: 4ch;
+}
+
+input[type=number] {-moz-appearance: textfield;}
 
 @-ms-viewport  {
     width: extend-to-zoom;

@@ -14,7 +14,21 @@ var ns = (function($) {
   var task = null;
   var sectordefs = {};
   var mapControl;
+  var enlStatus={};
 
+  function setEnlDefaults() {
+      enlStatus.threshold=500;
+      enlStatus.duration=12;
+      enlStatus.detect='Off';
+  }
+  
+  function showEnlStatus() {
+      $("input[name=enldetect][value=" + enlStatus.detect + "]").prop('checked', true);
+      $('#enlthreshold').val(enlStatus.threshold);
+      $('#enltime').val(enlStatus.duration);
+      $('#enlstatus').text(enlStatus.detect);
+  }
+  
   function loadAirspace(midpoint) {
     $.post("getairspace.php",
       {
@@ -66,6 +80,26 @@ var ns = (function($) {
     sectordefs.finishtype = "line";
   }
 
+  function enlReality() {
+      var configerror="";
+      if($("input[name='enldetect']:checked").val()==='On') {
+      var threshold= $('#enlthreshold').val();
+      var duration=$('#enltime').val();
+      if((threshold < 1) || (threshold > 999)) {
+          configerror+="\nIllegal threshold value";
+      }
+      if((duration < 2) || (duration > 100)) {
+          configerror+="\nUnrealistic time value";
+      }
+      }
+       if (configerror.length > 0) {
+      alert(configerror);
+      return false;
+    } else {
+      return true;
+    }
+  }
+  
   function realityCheck() {
     var configerror = "";
 
@@ -245,7 +279,7 @@ var ns = (function($) {
         else {
           if (curLeg === 0) {
             curLeg = 1;
-            tpindices[0] = i;
+            startIndexLatest=i;
             distanceToNext = task.legsize[1];
             timestamp = igcFile.recordTime[i].getTime();
           }
@@ -289,7 +323,7 @@ var ns = (function($) {
           currentDistance = distanceToNext - nextstatus.distance;
           if (currentDistance > bestSoFar) {
             bestSoFar = currentDistance;
-            startIndexLatest = tpindices[0];
+            tpindices[0]=startIndexLatest;
             bestIndex = i;
           }
         }
@@ -708,34 +742,78 @@ var ns = (function($) {
     var nPoints = igcFile.recordTime.length;
     var pressureBarogramData = [];
     var gpsBarogramData = [];
+    var enlData= [];
     var j;
     var timestamp;
+    var enlLabel;
+    var showEnl;
+    if(enlStatus.detect==='Off') {
+        showEnl=false;
+        enlLabel='';
+    }
+    else {
+        showEnl=true;
+        enlLabel='ENL';
+    }
+    var startTime= igcFile.recordTime[0].getTime() + timezone.offset;
     for (j = 0; j < nPoints; j++) {
       timestamp = igcFile.recordTime[j].getTime() + timezone.offset;
       pressureBarogramData.push([timestamp, igcFile.pressureAltitude[j] * altitudeConversionFactor]);
       gpsBarogramData.push([timestamp, igcFile.gpsAltitude[j] * altitudeConversionFactor]);
+      enlData.push([timestamp,igcFile.enl[j]]);
     }
     var baro = $.plot($('#barogram'), [{
-      label: 'Pressure altitude',
-      data: pressureBarogramData
+        label: enlLabel,
+        data: enlData,
+        yaxis: 2,
+        bars: {
+            show: showEnl
+        },
+        lines: {
+            show: false
+        },
+        color: '#D0D0FF'
     }, {
       label: 'GPS altitude',
-      data: gpsBarogramData
-    }], {
+      data: gpsBarogramData,
+      color: '#8080FF'
+    } ,  {
+      label: 'Pressure altitude',
+      data: pressureBarogramData,
+      color: '#FF0000'
+    },
+    {
+      label: '',
+      data: [[startTime,enlStatus.threshold],[timestamp,enlStatus.threshold]],
+      color: '#000000',
+      yaxis: 2,
+       lines: {
+            show: showEnl
+        }
+    }
+    ], {
       axisLabels: {
         show: true
       },
-      xaxis: {
-        mode: 'time',
-        timeformat: '%H:%M',
-        axisLabel: 'Time (' + timezone.zonename + ')'
-      },
-      yaxis: {
-        axisLabel: 'Altitude / ' + $('#altitudeUnits').val()
-      },
+    
+    xaxes: [ {
+                 mode: 'time',
+                timeformat: '%H:%M',
+                 axisLabel: 'Time (' + timezone.zonename + ')'
+             } ],
+    yaxes: [ {
+                axisLabel: 'Altitude / ' + $('#altitudeUnits').val()
+                }, {
+                position: "right", 
+                 axisLabel: 'Environmental Noise Level',
+                min: 20 ,
+                max: 4000,
+                 show: showEnl,
+                ticks: [0,500,1000]
+                } ],
 
-      crosshair: {
-        mode: 'xy'
+    crosshair: {
+     mode: 'xy'
       },
 
       grid: {
@@ -747,7 +825,7 @@ var ns = (function($) {
   }
 
   function updateTimeline(timeIndex, mapControl) {
-    var positionText = pointDescription(igcFile.latLong[timeIndex]);
+     var positionText = pointDescription(igcFile.latLong[timeIndex]);
     var unitName = $('#altitudeUnits').val();
     //add in offset from UTC then convert back to UTC to get correct time in timezone!
     var adjustedTime = new Date(igcFile.recordTime[timeIndex].getTime() + timezone.offset);
@@ -755,7 +833,7 @@ var ns = (function($) {
       (igcFile.pressureAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
       unitName + ' (barometric) / ' +
       (igcFile.gpsAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
-      unitName + ' (GPS); ' + positionText);
+      unitName + ' (GPS); ' + positionText + " enl: " + igcFile.enl[timeIndex]);
     mapControl.setTimeMarker(igcFile.latLong[timeIndex]);
     barogramPlot.lockCrosshair({
       x: adjustedTime.getTime(),
@@ -859,6 +937,7 @@ var ns = (function($) {
     }
     window.name = "igcview";
     setSectorDefaults();
+    setEnlDefaults();
     $("input[name=tasksource][value=infile]").prop('checked', true);
     $('#fileControl').change(function() {
       if (this.files.length > 0) {
@@ -890,6 +969,31 @@ var ns = (function($) {
       window.open("igcabout.html", "_blank");
     });
 
+    $('#applyenl').click(function() {
+        if(enlReality()) {
+        enlStatus.detect= $("input[name='enldetect']:checked").val();
+        enlStatus.threshold=parseInt($('#enlthreshold').val());
+        enlStatus.duration=parseInt($('#enltime').val());
+        showEnlStatus();
+        $('#setenl').hide();
+        if (igcFile !== null) {
+        plotBarogram();
+        }
+        if ($('#saveenl').prop("checked")) {
+          storePreference("enl", JSON.stringify(enlStatus));
+        }
+        }
+    });
+    
+        $('#enldefaults').click(function() {
+            setEnlDefaults();
+           showEnlStatus();
+        });
+    
+        $('#enlhelp').click(function() {
+             window.open("igchelp.html#enl", "_blank");
+        });
+        
     $('#altitudeUnits').change(function(e, raisedProgrammatically) {
       var altitudeUnit = $(this).val();
       if (altitudeUnit === 'feet') {
@@ -998,6 +1102,10 @@ var ns = (function($) {
       showSectors();
     });
 
+    $('#enl').click(function() {
+        $('#setenl').show();
+    });
+
     $('input[type=radio][name=tasksource]').change(function() {
       switch (this.value) {
         case "infile":
@@ -1027,6 +1135,7 @@ var ns = (function($) {
     var storedAltitudeUnit = '',
       airspaceClip = '';
     var storedSectorDefs;
+    var storedEnl;
     if (window.localStorage) {
       try {
         storedAltitudeUnit = localStorage.getItem("altitudeUnit");
@@ -1037,6 +1146,10 @@ var ns = (function($) {
         if (storedSectorDefs) {
           sectordefs = JSON.parse(storedSectorDefs);
         }
+        storedEnl=localStorage.getItem("enl");
+        if (storedEnl) {
+         enlStatus = JSON.parse(storedEnl);
+        }
         airspaceClip = localStorage.getItem("airspaceClip");
         if (airspaceClip) {
           $('#airclip').val(airspaceClip);
@@ -1045,7 +1158,9 @@ var ns = (function($) {
         // If permission is denied, ignore the error.
       }
     }
+    $( '#saveenl' ).prop( "checked", false );
     showSectors();
+    showEnlStatus();
   });
   return {
     importTask: function(taskinfo) {

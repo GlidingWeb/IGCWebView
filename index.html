@@ -73,8 +73,10 @@
             <option value="19501">19500 feet</option>
         </select>
         </span>
-         &nbsp;&nbsp;
-         <button id="configure">Configure TP sectors</button>
+         &nbsp;&nbsp;Configure:
+         <button id="configure">Sectors</button>
+         &nbsp;<button id="enl">Engine</button>
+         <span id='enlstatus'>Off</span>
             </p>
         </div>
     </div>
@@ -175,7 +177,16 @@
     <button id="tpdefaults">Restore defaults</button>
     <p>Save configuration:  <input id="savesectors" type="checkbox"></p>
     <button class="closewindow">Cancel</button>
-      <button id="setsectors">Apply</button>
+      <button id="setsectors" class="floatright">Apply</button>
+      </div>
+      <div id='setenl'>
+         <p><b>ENL engine detect:</b> <input type="radio" name="enldetect" value="Off" checked>Off&nbsp;  <input type="radio" name="enldetect" value="On">On
+         <p>Threshold: <input type='number' id="enlthreshold"  /> (1-1000)</p>
+         <p>Time required: <input type='number' id="enltime"  /> seconds</p>
+         <button id="enlhelp">Help</button>  <button id="enldefaults" class="floatright">Restore defaults</button>
+      <p>Save configuration:  <input id="saveenl" type="checkbox" checked=false></p>
+         <button class="closewindow">Cancel</button>
+         <button id="applyenl" class="floatright">Apply</button>
       </div>
 </body>
 

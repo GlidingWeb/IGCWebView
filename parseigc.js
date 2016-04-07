@@ -128,7 +128,7 @@ function parseIGC(igcFile) {
            };
     }
 
-    function parsePosition(positionRecord, model) {
+    function parsePosition(positionRecord, model,flightDate,readEnl) {
         // Regex to match position records:
         // Hours, minutes, seconds, latitude, N or S, longitude, E or W,
         // Fix validity ('A' = 3D fix, 'V' = 2D or no fix),
@@ -138,6 +138,8 @@ function parseIGC(igcFile) {
         //                      hours    minutes  seconds  latitude    longitude        press alt  gps alt
        var positionRegex = /^B([\d]{2})([\d]{2})([\d]{2})([\d]{7}[NS][\d]{8}[EW])([AV])([-\d][\d]{4})([-\d][\d]{4})/;
         var positionMatch = positionRecord.match(positionRegex);
+        var noiseLevel;
+        
         if (positionMatch) {
             // Convert the time to a date and time. Start by making a clone of the date
             // object that represents the date given in the headers:
@@ -149,8 +151,14 @@ function parseIGC(igcFile) {
                 model.recordTime[0] > positionTime) {
                 positionTime.setDate(flightDate.getDate() + 1);
             }
-        if(positionMatch[4] !=="0000000N00000000W") {
+            if(readEnl !==null) {
+                noiseLevel=parseInt(positionRecord.substring(readEnl.start,readEnl.end));
+            }
+            else {
+                noiseLevel=0;
+            }
            var  position=parseLatLong(positionMatch[4]);
+         if((position.lat !==0) && (position.lng !==0)) {
             if(position.lat > model.bounds.north) {
                model.bounds.north=position.lat;
             }
@@ -165,14 +173,33 @@ function parseIGC(igcFile) {
             }
             return {
                 recordTime: positionTime,
-                latLong: parseLatLong(positionMatch[4]),
+                latLong:  position,
                 pressureAltitude: parseInt(positionMatch[6], 10),
-                gpsAltitude: parseInt(positionMatch[7], 10)
+                gpsAltitude: parseInt(positionMatch[7], 10),
+                noise: noiseLevel
             };
          }
         }
     }
-    
+
+    function getReadEnl(iRecord) {
+        var charpt=iRecord.search("ENL");
+        if(charpt > 6) {
+     var pos=iRecord.substring(charpt-4,charpt);
+       return {
+            start: parseInt(pos.substring(0,2))-1,
+            end: parseInt(pos.substring(2,4))
+        };
+        }
+        else {
+            return null;
+         //   return {
+          //  start: 0,
+           // end: 0
+       // };
+    }
+    }
+
     // ---- Start of IGC parser code ----
     
     var invalidFileMessage = 'This does not appear to be an IGC file.';
@@ -193,6 +220,7 @@ function parseIGC(igcFile) {
         pressureAltitude: [],
         gpsAltitude: [],
         taskpoints: [],
+        enl: [],
         bounds: {
             south: 90,
             west: 180,
@@ -200,7 +228,7 @@ function parseIGC(igcFile) {
             east: -180
         }
     };
-
+   
     // The first line should begin with 'A' followed by
     // a 3-character manufacturer Id and a 3-character serial number.
     if (!(/^A[\w]{6}/).test(igcLines[0])) {
@@ -224,21 +252,25 @@ function parseIGC(igcFile) {
     var recordType;
     var currentLine;
     var headerData;
+    var readEnl=null;
 
     for (lineIndex = 0; lineIndex < igcLines.length; lineIndex++) {
         currentLine = igcLines[lineIndex];
         recordType = currentLine.charAt(0);
         switch (recordType) {
             case 'B': // Position fix
-                positionData = parsePosition(currentLine, model, flightDate);
+                positionData = parsePosition(currentLine, model, flightDate,readEnl);
                 if (positionData) {
                     model.recordTime.push(positionData.recordTime);
                     model.latLong.push(positionData.latLong);
                     model.pressureAltitude.push(positionData.pressureAltitude);
                     model.gpsAltitude.push(positionData.gpsAltitude);
+                    model.enl.push(positionData.noise);
                 }
                 break;
-
+             case 'I':  //Fix extensions
+                readEnl= getReadEnl(currentLine);
+               break;
             case 'C': // Task declaration
                 var taskRegex = /^C[\d]{7}[NS][\d]{8}[EW].*/;
                 if (taskRegex.test(currentLine)) {
