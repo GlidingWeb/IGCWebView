@@ -231,7 +231,7 @@ var ns = (function ($) {
                 else {
                     if (curLeg === 0) {
                         curLeg = 1;
-                        tpindices[0] = i;
+                        startIndexLatest = i;
                         distanceToNext = task.legsize[1];
                         timestamp = igcFile.recordTime[i].getTime();
                     }
@@ -274,7 +274,7 @@ var ns = (function ($) {
                     currentDistance = distanceToNext - nextstatus.distance;
                     if (currentDistance > bestSoFar) {
                         bestSoFar = currentDistance;
-                        startIndexLatest = tpindices[0];
+                        tpindices[0] = startIndexLatest;
                         bestIndex = i;
                     }
                 }
