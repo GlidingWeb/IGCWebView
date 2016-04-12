@@ -206,7 +206,6 @@ var ns = (function($) {
     var finishTime;
     var finishAlt;
     var bestSoFar = 0;
-    var startIndexBest;
     var curLeg = -1;
     var sectorLimits = getSectorLimits();
     do {
