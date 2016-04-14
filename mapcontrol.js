@@ -33,6 +33,7 @@ function createMapControl() {
   });
   var trackline;
   var trackbounds;
+  var engineLines=[];
 
   var pinicon = {
     url: 'pin.png',
@@ -60,6 +61,14 @@ function createMapControl() {
     circleBases.length = 0;
   }
 
+  function deleteEnl () {
+      var i;
+      for(i=0;i < engineLines.length;i++) {
+          engineLines[i].setMap(null);
+      }
+      engineLines=[];
+  }
+  
   function deleteTask() {
     var i;
     for (i = 0; i < taskfeatures.length; i++) {
@@ -75,6 +84,7 @@ function createMapControl() {
         trackline.setMap(null);
       }
       deleteTask();
+      deleteEnl();
       pin.setMap(null);
     },
 
@@ -222,6 +232,22 @@ function createMapControl() {
       map.fitBounds(trackbounds);
     },
 
+    showRuns: function(coords) {
+       var runline = new google.maps.Polyline({
+        path: coords,
+        strokeColor: 'yellow',
+        strokeOpacity: 1.0,
+        clickable: false,
+        strokeWeight: 4
+      }); 
+       runline.setMap(map);
+       engineLines.push(runline);
+    },
+    
+    zapEngineRuns: function() {
+        deleteEnl();
+    },
+    
     setBounds: function(bounds) {
       var sw = new google.maps.LatLng(bounds.south, bounds.west);
       var ne = new google.maps.LatLng(bounds.north, bounds.east);

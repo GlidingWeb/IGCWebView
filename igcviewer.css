@@ -247,8 +247,6 @@ float: right;
 width: 4ch;
 }
 
-input[type=number] {-moz-appearance: textfield;}
-
 @-ms-viewport  {
     width: extend-to-zoom;
     zoom: 1.0;
