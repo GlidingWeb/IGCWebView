@@ -404,10 +404,56 @@ var ns = (function($) {
     $('#taskcalcs').append("<br/>Flight time: " + toTimeString(igcFile.recordTime[landing].getTime() - igcFile.recordTime[takeoff].getTime(), false));
   }
 
+  function getGlidingRuns() {
+      var starts=[];
+      var ends=[];
+      var start=0;
+      var i=0;
+      do {
+          if((engineRuns[i].start- start) > 10) {
+          starts.push(start);
+          ends.push(engineRuns[i].start);
+          }
+           start=engineRuns[i].end;
+           i++;
+      }
+      while(i < engineRuns.length);
+       if((igcFile.latLong.length - start) > 10) {
+       starts.push(start);
+       ends.push(igcFile.latLong.length);
+       }
+      return {starts: starts,
+          ends:ends};
+  }
+  
   function assessTask() {
+    var i;
+    var glidingStart;
+    var glidingEnd;
+    var bestLength=0;
+    var assessment={};
+    var tempAssess={};
     var takeOffIndex = getTakeOffIndex();
     var landingIndex = getLandingIndex();
-    var assessment = assessSection(takeOffIndex, landingIndex);
+    if ((enlStatus.detect==='Off') || (engineRuns.length===0)) {
+    assessment = assessSection(takeOffIndex, landingIndex);
+    }
+    else {
+        var runlist=getGlidingRuns();
+        for(i=0; i < runlist.starts.length; i++) {
+            if(runlist.starts[i] < takeOffIndex) {
+                runlist.starts[i] = takeOffIndex;
+            }
+            if(runlist.ends[i] > landingIndex) {
+                runlist.ends[i]= landingIndex;
+            }
+            tempAssess=assessSection(runlist.starts[i],runlist.ends[i]);
+            if(tempAssess.scoreDistance > bestLength) {
+                bestLength=tempAssess.scoreDistance;
+                assessment=tempAssess;
+            }
+        }
+        }
     showResult(takeOffIndex, landingIndex, assessment);
   }
 
@@ -843,7 +889,7 @@ var ns = (function($) {
       (igcFile.pressureAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
       unitName + ' (barometric) / ' +
       (igcFile.gpsAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
-      unitName + ' (GPS); ' + positionText + " enl: " + igcFile.enl[timeIndex]);
+      unitName + ' (GPS); ' + positionText + " enl: " + igcFile.enl[timeIndex] + " index: " + timeIndex);
     mapControl.setTimeMarker(igcFile.latLong[timeIndex]);
     barogramPlot.lockCrosshair({
       x: adjustedTime.getTime(),
