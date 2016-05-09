@@ -1,10 +1,19 @@
 /* global jQuery */
 var ns = (function($) {
   'use strict';
+    var earthrad = 6378; //  Earth radius km
+    var metre2foot= 3.2808399;
+    var mps2knot= 1.9426025694;
+    var mps2fpm= 196.8503937;
+    var kph2knot= 0.53961182484;
+    var km2miles=  0.62137119224;
+    var altUnits= {};
+    var climbUnits= {};
+    var cruiseUnits={};
+    var speedUnits ={};
+    var distanceUnits={};
   var igcFile = null;
-  var earthrad = 6378; //  Earth radius km
   var barogramPlot = null;
-  var altitudeConversionFactor = 3.2808399; // Conversion from metres to required units
   var timezone = {
     zonename: "Europe/London",
     zoneabbr: "UTC",
@@ -16,6 +25,7 @@ var ns = (function($) {
   var mapControl;
   var enlStatus = {};
   var engineRuns = [];
+  var igcExtra= null;
 
   function setEnlDefaults() {
     enlStatus.threshold = 500;
@@ -23,6 +33,11 @@ var ns = (function($) {
     enlStatus.detect = 'Off';
   }
 
+  function showval(converter,value) {
+      var conValue=converter.multiplier*value;
+      return conValue.toFixed(converter.precision) + converter.descriptor;
+  }
+  
   function showEnlStatus() {
     $("input[name=enldetect][value=" + enlStatus.detect + "]").prop('checked', true);
     $('#enlthreshold').val(enlStatus.threshold);
@@ -141,8 +156,6 @@ var ns = (function($) {
       lng: retlng
     };
   }
-
-
 
   function topoint(start, end) {
     var degLat1;
@@ -382,11 +395,13 @@ var ns = (function($) {
       }
     }
     if (assessment.npoints === task.coords.length) { //task completed
-      $('#taskcalcs').append("<br/><br/>" + task.distance.toFixed(2) + " Km task completed");
+        $('#taskcalcs').append("<br/><br/>" + showval(distanceUnits,task.distance) + "  task completed");
       $('#taskcalcs').append("<br/>Elapsed time: " + toTimeString(timestamp[task.coords.length - 1] - timestamp[0], true));
-      $('#taskcalcs').append("<br/>Speed: " + (3600000 * task.distance / (timestamp[task.coords.length - 1] - timestamp[0])).toFixed(2) + " km/hr");
-      $('#taskcalcs').append("<br/>Height loss: " + (altitudeConversionFactor * (tpAlt[0] - tpAlt[task.coords.length - 1])).toFixed(0) + " " + $('#altitudeUnits').val());
-      if (altitudeConversionFactor !== 1) {
+      var taskspeed= 3600000 * task.distance / (timestamp[task.coords.length - 1] - timestamp[0]);
+      $('#taskcalcs').append("<br/>Speed: " + showval(speedUnits,taskspeed));
+      var heightLoss=tpAlt[0] - tpAlt[task.coords.length - 1];
+      $('#taskcalcs').append("<br/>Height loss: " + showval(altUnits, (tpAlt[0] - tpAlt[task.coords.length - 1])));
+      if (altUnits.multiplier!==1) {
         $('#taskcalcs').append(" (" + (tpAlt[0] - tpAlt[task.coords.length - 1]).toFixed(0) + "m)");
       }
     }
@@ -460,7 +475,7 @@ var ns = (function($) {
   function getPosInfo(recordTime, altitude) {
     var adjustedTime = new Date(recordTime + timezone.offset);
     var showTime = adjustedTime.getUTCHours() + ':' + pad(adjustedTime.getUTCMinutes()) + ':' + pad(adjustedTime.getSeconds());
-    return showTime + ":  Altitude: " + (altitude * altitudeConversionFactor).toFixed(0) + " " + $('#altitudeUnits').val();
+    return showTime + ":  Altitude: " + showval(altUnits, altitude);
   }
 
   function toTimeString(interval, showsecs) {
@@ -812,8 +827,8 @@ var ns = (function($) {
     var startTime = igcFile.recordTime[0].getTime() + timezone.offset;
     for (j = 0; j < nPoints; j++) {
       timestamp = igcFile.recordTime[j].getTime() + timezone.offset;
-      pressureBarogramData.push([timestamp, igcFile.pressureAltitude[j] * altitudeConversionFactor]);
-      gpsBarogramData.push([timestamp, igcFile.gpsAltitude[j] * altitudeConversionFactor]);
+      pressureBarogramData.push([timestamp, igcFile.pressureAltitude[j] * altUnits.multiplier]);
+      gpsBarogramData.push([timestamp, igcFile.gpsAltitude[j] * altUnits.multiplier]);
       enlData.push([timestamp, igcFile.enl[j]]);
     }
     var baro = $.plot($('#barogram'), [{
@@ -858,7 +873,7 @@ var ns = (function($) {
         axisLabel: 'Time (' + timezone.zonename + ')'
       }],
       yaxes: [{
-        axisLabel: 'Altitude / ' + $('#altitudeUnits').val()
+        axisLabel: 'Altitude / ' +  altUnits.descriptor
       }, {
         position: "right",
         axisLabel: 'Environmental Noise Level',
@@ -882,18 +897,21 @@ var ns = (function($) {
 
   function updateTimeline(timeIndex, mapControl) {
     var positionText = pointDescription(igcFile.latLong[timeIndex]);
-    var unitName = $('#altitudeUnits').val();
-    //add in offset from UTC then convert back to UTC to get correct time in timezone!
     var adjustedTime = new Date(igcFile.recordTime[timeIndex].getTime() + timezone.offset);
-    $('#timePositionDisplay').html(adjustedTime.getUTCHours() + ':' + pad(adjustedTime.getUTCMinutes()) + ':' + pad(adjustedTime.getSeconds()) + " " + timezone.zoneabbr + '; ' +
-      (igcFile.pressureAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
-      unitName + ' (barometric) / ' +
-      (igcFile.gpsAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
-      unitName + ' (GPS); ' + positionText + " enl: " + igcFile.enl[timeIndex] + " index: " + timeIndex);
+      var displaySentence=adjustedTime.getUTCHours()+ ':' + pad(adjustedTime.getUTCMinutes()) + ':' + pad(adjustedTime.getSeconds()) + " " + timezone.zoneabbr + '; ' +
+      showval(altUnits, igcFile.pressureAltitude[timeIndex])  + ' ' + ' (baro) / ' +  positionText;
+      if(timeIndex >15) {
+          displaySentence += " " + igcExtra.flightMode[timeIndex] + ": " ;
+          if( igcExtra.flightMode[timeIndex]==='Cruising') {
+              displaySentence+=showval(cruiseUnits,igcExtra.snapspeed[timeIndex]);
+          }
+         displaySentence+= ": vario " + showval(climbUnits,igcExtra.avgeclimb[timeIndex]);
+      }
+      $('#timePositionDisplay').html(displaySentence);
     mapControl.setTimeMarker(igcFile.latLong[timeIndex]);
     barogramPlot.lockCrosshair({
       x: adjustedTime.getTime(),
-      y: igcFile.pressureAltitude[timeIndex] * altitudeConversionFactor
+      y: igcFile.pressureAltitude[timeIndex] * altUnits.multiplier
     });
   }
 
@@ -1032,18 +1050,183 @@ var ns = (function($) {
     }
   }
 
+  function setConverter(unitObj,descriptor,multiplier,precision) {
+      unitObj.descriptor= descriptor;
+      unitObj.multiplier = multiplier;
+      unitObj.precision= precision;
+  }
+
+  /*
+  function setUnitDefaults() {
+     $('#altitudeunits').val("ft");
+     $('#climbunits').val("kt");
+      $('#cruiseunits').val("kt");
+      $('#taskunits').val("kph");
+      $('#lengthunits').val("km");
+  }
+*/
+  function reParse() {
+      var modelPlus= {
+          stdTime: [],
+          heading: [],
+          distance: [],
+           snapspeed: [],
+          avgeclimb: [],
+          flightMode: [],
+          groundspeed: [],
+      };
+      var i;
+      var j;
+      var deltaBearing;
+      var whereGoing;
+      var turnCusum;
+      var speedSum;
+      modelPlus.stdTime[0]=igcFile.recordTime[0].getTime();
+      var timeInterval=Math.round((igcFile.recordTime[igcFile.recordTime.length-1].getTime()-modelPlus.stdTime[0])/igcFile.recordTime.length/1000);
+      var timeRange= Math.ceil(30/timeInterval);   //used for calculating 30 second average speed and climb;
+      for(i=1; i < igcFile.recordTime.length; i++) {
+          modelPlus.flightMode[i]="";
+          modelPlus.stdTime[i]= igcFile.recordTime[i].getTime();
+          whereGoing=topoint(igcFile.latLong[i-1], igcFile.latLong[i]);
+           modelPlus.heading[i]=whereGoing.bearing ;
+           modelPlus.distance[i]=whereGoing.distance;
+          modelPlus.snapspeed[i]=3600000*whereGoing.distance/(modelPlus.stdTime[i]-modelPlus.stdTime[i-1]);
+          if(i > 15) {
+                speedSum=0;
+                turnCusum=0;
+                for(j=i-timeRange; j  <  i; j++) {
+                    deltaBearing= (360+modelPlus.heading[j+1]-modelPlus.heading[j])%360;
+                    if(Math.abs(deltaBearing) > 180) {
+                        deltaBearing -= 360;
+                    }
+                    turnCusum+=deltaBearing;
+                    speedSum+=modelPlus.snapspeed[i];
+                }
+                if(Math.abs(turnCusum) > 100) {
+                    modelPlus.flightMode[i]="Circling";
+                }
+                else {
+                    modelPlus.flightMode[i]="Cruising";
+                }
+               modelPlus.avgeclimb[i]=1000*(igcFile.pressureAltitude[i-1]- igcFile.pressureAltitude[i-timeRange])/(modelPlus.stdTime[i-1]- modelPlus.stdTime[i-timeRange]);
+                modelPlus.groundspeed[i]=speedSum/timeRange;
+          }
+          else {
+              modelPlus.flightMode[i]="";
+          }
+      }
+       return modelPlus;
+}
+
+function applyUnits() {
+    switch($('#altitudeunits').val()) {
+        case "ft":
+         setConverter(altUnits," feet",metre2foot,0);
+         break;
+        case "mt":
+         setConverter(altUnits," metres",1,0);
+         break;
+    }
+
+      switch($('#climbunits').val()) {
+          case "kt":
+             setConverter(climbUnits," knots",mps2knot,1);
+             break;
+          case "mps":
+              setConverter(climbUnits," m/s",1,1);
+              break;
+          case "fpm":
+            setConverter(climbUnits," ft/min",mps2fpm,0);
+              break;   
+      }
+      switch($('#cruiseunits').val()) {
+          case "kt":
+             setConverter(cruiseUnits," knots",kph2knot,0);
+             break;
+          case "kph":
+              setConverter(cruiseUnits," km/hr",1,0);
+              break;
+          case "mph":
+            setConverter(cruiseUnits," miles/hr",km2miles,0);
+              break;   
+      }
+       switch($('#taskunits').val()) {
+          case "kph":
+              setConverter(speedUnits," km/hr",1,2);
+              break;
+          case "mph":
+            setConverter(speedUnits," miles/hr",km2miles,2);
+              break;   
+      }
+       switch($('#lengthunits').val()) {
+          case "km":
+              setConverter(distanceUnits," Km",1,1);
+              break;
+          case "miles":
+            setConverter(distanceUnits," Miles",km2miles,2);
+              break;   
+      }
+      if (igcFile !== null) {
+          plotBarogram();
+          var t = parseInt($('#timeSlider').val(), 10);
+             updateTimeline(t, mapControl);
+        }
+      storePreference("altitudeUnit", $('#altitudeunits').val());
+      storePreference("climbUnit", $('#climbunits').val());
+      storePreference("cruiseUnit", $('#cruiseunits').val());
+      storePreference("taskUnit", $('#taskunits').val());
+      storePreference("lengthUnit", $('#lengthunits').val());
+}
+
+function getStoredValues() {
+     try {
+       var  storedAltitudeUnit = localStorage.getItem("altitudeUnit");;
+        if(storedAltitudeUnit) {
+            $('#altitudeunits').val(storedAltitudeUnit);
+        }
+        var storedClimbUnit=localStorage.getItem("climbUnit");
+        if(storedClimbUnit) {
+            $('#climbunits').val(storedClimbUnit);
+        }
+         var storedCruiseUnit=localStorage.getItem("cruiseUnit");
+        if(storedCruiseUnit) {
+            $('#cruiseunits').val(storedCruiseUnit);
+        }
+         var storedTaskUnit=localStorage.getItem("taskUnit");
+        if(storedTaskUnit) {
+            $('#taskunits').val(storedTaskUnit);
+        }
+        var storedLengthUnit=localStorage.getItem("lengthUnit");
+        if(storedLengthUnit) {
+            $('#lengthunits').val(storedLengthUnit);
+        }
+      var storedSectorDefs = localStorage.getItem("sectors");
+        if (storedSectorDefs) {
+          sectordefs = JSON.parse(storedSectorDefs);
+        }
+       var  storedEnl = localStorage.getItem("enl");
+        if (storedEnl) {
+          enlStatus = JSON.parse(storedEnl);
+        }
+        var storedAirspaceClip = localStorage.getItem("airspaceClip");
+        if (storedAirspaceClip) {
+          $('#airclip').val(airspaceClip);
+        }
+      } catch (e) {
+        // If permission is denied, ignore the error.
+      }
+}
+
   $(document).ready(function() {
     mapControl = createMapControl();
     var planWindow = null;
-    var altitudeUnit = $('#altitudeUnits').val();
-    if (altitudeUnit === 'feet') {
-      altitudeConversionFactor = 3.2808399;
-    } else {
-      altitudeConversionFactor = 1.0;
-    }
     window.name = "igcview";
     setSectorDefaults();
     setEnlDefaults();
+    applyUnits();
+    if (window.localStorage) {
+        getStoredValues();
+    }
     $("input[name=tasksource][value=infile]").prop('checked', true);
     $('#fileControl').change(function() {
       if (this.files.length > 0) {
@@ -1054,6 +1237,7 @@ var ns = (function($) {
             mapControl.reset();
             $('#timeSlider').val(0);
             igcFile = parseIGC(this.result);
+            igcExtra=reParse();
             displayIgc(mapControl);
           } catch (ex) {
             if (ex instanceof IGCException) {
@@ -1106,7 +1290,7 @@ var ns = (function($) {
     $('#enlhelp').click(function() {
       window.open("igchelp.html#enl", "_blank");
     });
-
+/*
     $('#altitudeUnits').change(function(e, raisedProgrammatically) {
       var altitudeUnit = $(this).val();
       if (altitudeUnit === 'feet') {
@@ -1123,7 +1307,7 @@ var ns = (function($) {
         storePreference("altitudeUnit", altitudeUnit);
       }
     });
-
+*/
     // We need to handle the 'change' event for IE, but
     // 'input' for Chrome and Firefox in order to update smoothly
     // as the range input is dragged.
@@ -1131,9 +1315,12 @@ var ns = (function($) {
       var t = parseInt($(this).val(), 10);
       updateTimeline(t, mapControl);
     });
+    
     $('#timeSlider').on('change', function() {
       var t = parseInt($(this).val(), 10);
       updateTimeline(t, mapControl);
+      // var climb= climbRate(t);
+      //$('#timePositionDisplay').append(" Climb: " + climb +"m/s");
     });
 
     $('#airclip').change(function() {
@@ -1210,6 +1397,11 @@ var ns = (function($) {
       }
     });
 
+    $('#applyunits').click(function() {
+        applyUnits();
+        $(this).parent().hide();
+    });
+    
     $('#tpdefaults').click(function() {
       setSectorDefaults();
       showSectors();
@@ -1219,6 +1411,10 @@ var ns = (function($) {
       $('#setenl').show();
     });
 
+    $('#unitconfig').click(function() {
+      $('#setunits').show();
+    });
+    
     $('input[type=radio][name=tasksource]').change(function() {
       switch (this.value) {
         case "infile":
@@ -1244,7 +1440,7 @@ var ns = (function($) {
           task = null;
       }
     });
-
+/*
     var storedAltitudeUnit = '',
       airspaceClip = '';
     var storedSectorDefs;
@@ -1271,6 +1467,7 @@ var ns = (function($) {
         // If permission is denied, ignore the error.
       }
     }
+    */
     $('#saveenl').prop("checked", false);
     showSectors();
     showEnlStatus();
