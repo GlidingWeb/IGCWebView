@@ -82,6 +82,14 @@
         Start, finish, and turning point sectors used in the calculation are defined as shown on the map.  If you want to use something else, you can change these (see below).
         </p>
         
+        <a name='alt' />
+        <h2>Altitude reference setting</h2>
+        <p>IgcWebView lets you define how altitude or height is calculated and displayed.  To configure this click on the "Altitude ref." button.
+        <p>IGC loggers record pressure altitude referenced to the international standard of 1013.25 millibars- the same value you set your altimeter to show flight levels.  How this relates to your altitude depends on the weather.  This is the default for the application, shown as "std". </p>
+        <p>As an alternative you can elect to show height above your take-off point, selected as "QFE takeoff" and displayed as "QFE".  </p>
+        <p>Another option is to select "QNH", notionally height above sea level.  The application looks up the height above sea level at your takeoff point using Google's elevation API and makes the necessary adjustment.  Accuracy is dependant on the precision of Google's mapping, but most airfields are flat, and on tests so far it works well. </p>
+        <p>You may also choose between using pressure or GPS data sources.  It is strongly advised you use pressure, the default setting.  The application will fall back to using GPS altitude if pressure isn't available- if pressure is set as a preference it will warn you when doing this.</p>
+        <p>Handling of GPS altitude will vary between instruments.  The simplest earth model widely used is the "WGS84 ellipsoid", a neat mathematical model of the earth's shape.  This is the preferred reference in the IGC specification, and found in recent loggers.  Unfortunately in the real world, sea level and the ellipsoid don't coincide, and something called "geoid correction" is needed to take care of local variations which can be as much as 50 metres.  Most commercial GPS systems (and many older loggers) have geoid correction tables built in, so we've no way of knowing what we've got.  So if you select "Standard" as your reference and GPS as your source you will be shown raw data from the file, reference point uncertain.  Select either of the other two options and you will get a calculated offset as with pressure.  Be aware that then despite the fact that we are using "QFE" and "QNH" as convenient abbreviations, they aren't quite the same as the real thing.</p>
          <h2>Control sectors</h2>
         <p>
            The defaults in the program are as follows:
