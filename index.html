@@ -16,6 +16,7 @@
     <script src="lib/jquery.flot.time.min.js"></script>
     <script src="parseigc.js"></script>
     <script src="mapcontrol.js"></script>
+    <script src="taskcalc.js"></script>
     <script src="igcviewer.js"></script>
 </head>
 
@@ -56,7 +57,7 @@
         <div class='hideable'>
             <p>
         <button id="unitconfig">Units</button>
-         &nbsp;<button id="configure">Sectors</button>
+         &nbsp;<button id="sectorconfig">Sectors</button>
          &nbsp;<button id="enl">Engine</button>
         &nbsp;<button id="altref">Altitude ref.</button>
          <span class="nowrap">
@@ -77,11 +78,11 @@
         <h2>Select Task Source</h2>
         <button class='toggle'>Hide</button>
         <div>
-        <p><span class='nowrap'><label for='infile'>IGC File</label><input type='radio' name='tasksource'  value='infile' id='infile'/></span>
+        <p><span class='nowrap'><label for='infile'>IGC File</label><input type='radio' name='tasksource'  value='infile' id='infile' checked/></span>
         <span class='nowrap'><label for='user'>User entry</label><input type='radio' name='tasksource'  value='user' id='user'/></span>
-        <span class='nowrap'><label for='xcplan'>XCWebPlan</label><input type='radio' name='tasksource'  value='xcplan' id='xcplan'/></span>
+        <span class='nowrap'><label for='xcplan'>XCWebPlan (world)</label><input type='radio' name='tasksource'  value='xcplan' id='world'/></span>
+         <span class='nowrap'><label for='xcplan'>XCWebPlan (UK)</label><input type='radio' name='tasksource'  value='xcplan' id='uk'/></span>
         <span class='nowrap'><label for='nix'>None</label><input type='radio' name='tasksource'  value='nix' id='nix'/> </span></p>
-        <button id='testbutton'>Test</button>
         <div id='taskentry'>
             <p>You may enter <a href="http://www.spsys.demon.co.uk/turningpoints.htm" target="_blank">BGA trigraphs</a>, six
                 character codes for waypoints on the <a href="http://www.segelflug.de/vereine/welt2000/" target="_blank"> Welt2000 database</a>  or Lat/Long in either 'dd:mm.mmm&nbsp;N&nbsp;ddd:mm.mmm&nbsp;W' or 'dd:mm:ss&nbsp;N&nbsp;ddd:mm:ss&nbsp;W'
@@ -130,9 +131,9 @@
     </div>
     <br>
     <div id="igcFileDisplay">
-
         <div id="mapWrapper" class="halfwidth">
             <div id="map"></div>
+            <div id="flightinfo">
             <div id="slider">
                 <label for="timeSlider">Time:</label>
                 <input type="range" id="timeSlider" step="1" value="0" min="0" max="100" />
@@ -140,6 +141,7 @@
             </div>
             <p>Zoom:
                 <button id="zoomtrack">Track</button>&nbsp;&nbsp;<span id="taskbuttons"></span><button id="analyse">&nbsp;&nbsp; Analyse task</button></p>
+        </div>
         </div>
         <div id="barogram" class="halfwidth"></div>
     </div>
@@ -151,39 +153,8 @@
     <p id="flighttime"></p>
     <button class="closewindow">Close</button>
     </div>
-    <div id="sectors">
-    <h3>Control Sectors</h3>
-    <p>
-    <b>Start Line:</b><br/>Radius: <input id="startrad" type="text" value="5.0"/>Km
-    </p>
-    <p><b>Turning Points:</b><br/>
-    Circle radius:  <input id="tpbarrelrad" type="text" value="0.5"/>Km <input id="tpbarrel" type="checkbox" checked/><br/>
-    Sector: 
-    <select id="subtends" class="inbutton">
-           <option value="90" selected>90&deg;</option>
-           <option value="180">180&deg;</option>
-     </select>
-     &nbsp;radius: <input id="tpsectorrad" type="text" value="15"/>Km <input type="checkbox" id="tpsector" checked/>
-    </p>
-    <p>
-    <b>Finish:</b><br/>Radius: <input id="finishrad" type="text" value="1.0"/>Km<br/>
-    <input type="radio" name="finishtype" value="line" checked> Line&nbsp;  <input type="radio" name="finishtype" value="circle">Circle
-    </p>
-    <button id="tpdefaults">Restore defaults</button>
-    <p>Save configuration:  <input id="savesectors" type="checkbox"></p>
-    <button id="cancelsectors">Cancel</button>
-      <button id="setsectors" class="floatright">Apply</button>
-      </div>
-      <div id='setenl'>
-         <p><b>ENL engine detect:</b> <input type="radio" name="enldetect" value="Off" checked>Off&nbsp;  <input type="radio" name="enldetect" value="On">On
-         <p>Threshold: <input type='text' id="enlthreshold"  /> (1-1000)</p>
-         <p>Time required: <input type='text' id="enltime"  /> seconds</p>
-         <button id="enlhelp">Help</button>  <button id="enldefaults" class="floatright">Restore defaults</button>
-      <p>Save configuration:  <input id="saveenl" type="checkbox" checked=false></p>
-         <button id="cancelenl">Cancel</button>
-         <button id="applyenl" class="floatright">Apply</button>
-      </div>
-          <div id='setunits'>
+    
+            <div id='setunits'>
          <p><b>Select units:</b> </p>
          <p>Altitude: 
            <select id="altitudeunits" class="inbutton">
@@ -221,6 +192,41 @@
          <button id="cancelunits">Cancel</button>
          <button id="applyunits" class="floatright">Apply</button>
       </div>
+      
+    <div id="sectordefs">
+    <h3>Control Sectors</h3>
+    <p>
+    <b>Start Line:</b><br/>Radius: <input id="startrad" type="text" value="5.0"/>Km
+    </p>
+    <p><b>Turning Points:</b><br/>
+    Circle radius:  <input id="tpbarrelrad" type="text" value="0.5"/>Km <input id="tpbarrel" type="checkbox" checked/><br/>
+    Sector: 
+    <select id="subtends" class="inbutton">
+           <option value="90" selected>90&deg;</option>
+           <option value="180">180&deg;</option>
+     </select>
+     &nbsp;radius: <input id="tpsectorrad" type="text" value="15"/>Km <input type="checkbox" id="tpsector" checked/>
+    </p>
+    <p>
+    <b>Finish:</b><br/>Radius: <input id="finishrad" type="text" value="1.0"/>Km<br/>
+    <input type="radio" name="finishtype" value="line" checked> Line&nbsp;  <input type="radio" name="finishtype" value="circle">Circle
+    </p>
+    <button id="tpdefaults">Restore defaults</button>
+    <p>Save configuration:  <input id="savesectors" type="checkbox"></p>
+    <button id="cancelsectors">Cancel</button>
+      <button id="setsectors" class="floatright">Apply</button>
+      </div>
+      <div id='setenl'>
+         <p><b>ENL engine detect:</b> <input type="radio" name="enldetect" value="Off" checked>Off&nbsp;  <input type="radio" name="enldetect" value="On">On
+         <p>Threshold: <input type='text' id="enlthreshold"  /> (1-1000)</p>
+         <p>Time required: <input type='text' id="enltime"  /> seconds</p>
+         <button id="enlhelp">Help</button>  
+         <button id="enldefaults" class="floatright">Restore defaults</button>
+      <p>Save configuration:  <input id="saveenl" type="checkbox" checked=false></p>
+         <button id="cancelenl">Cancel</button>
+         <button id="applyenl" class="floatright">Apply</button>
+      </div>
+  
       <div id='setaltref'>
          <h3>Altitude reference</h3>
          <p>*Standard (STD) <input type='radio' name='alttype'  value='std'/><br />

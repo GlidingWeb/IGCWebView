@@ -155,7 +155,6 @@ left: 10em;
 
 #igcFileDisplay {
     clear: both;
-   visibility: hidden;
 }
 
 table#headerInfo {
@@ -167,7 +166,7 @@ table#headerInfo {
    width: 100%;
 }
 
-#airspace_info {
+#airspace_info, #flightinfo  {
 display: none;
 }
 
@@ -191,7 +190,7 @@ display: none;
     left: 0;
     right: 0;
     width: 18em;
-    height: 350px;
+    height: 370px;
     padding: 15px;
     margin: auto;
      border-style: solid;
@@ -202,7 +201,7 @@ display: none;
   background-color: white;
 }
 
-#sectors  {
+#sectordefs  {
   display: none;
     position: fixed;
     top: 0;
@@ -221,7 +220,7 @@ display: none;
   background-color: white;
 }
 
-#sectors input[type='text'] {
+#sectordefs input[type='text'] {
    width: 3em;
 }
 

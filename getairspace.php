@@ -34,68 +34,31 @@ $circles=array();
    return $circles;
 }
 
-$countries=array(
-   'AUT'=>'at',
-   'AUS'=>'au',
-   'BEL'=>'be',
-   'BRA'=>'br',
-   'CAN'=>'ca',
-   'CHE'=>'ch',
-   'CZE'=>'cz',
-   'DEU'=>'de',
-   'EST'=>'ee',
-   'ESP'=>'es',
-   'FIN'=>'fi',
-   'FRA'=>'fr',
-   'HRV'=>'hr',
-   'HUN'=>'hu',
-   'IRL'=>'ie',
-   'ITA'=>'it',
-   'LTU'=>'lt',
-   'LVA'=>'lv',
-   'MKD'=>'mk',
-   'NLD'=>'nl',
-   'NOR'=>'no',
-   'NZL'=>'nz',
-   'POL'=>'pl',
-   'PRT'=>'pt',
-   'SWE'=>'se',
-   'SVN'=>'si',
-   'SVK'=>'sk',
-   'GBR'=>'uk',
-   'USA'=>'us',
-   'ZAF'=>'za',
-    );
 
- $degdist = 111; // km- circumference of the earth divided by 360
-    
+$degdist = 111; // km- circumference of the earth divided by 360
 require_once("../db_inc.php");
 $mysqli=new mysqli($dbserver,$username,$password,$database);
-    //find box approx 333 Km from start pt each way
-    $north=$_POST['lat'] + 3;
-    if($north > 90) {
-    $north=90;
-    }
-    $south=$_POST['lat'] - 3;
-    if($south  < -90) {
-    $south=-90;
-    }
-    $latcorr=cos(deg2rad($_POST['lat']));
-    if($latcorr > 0)  {   //in case file error gives takeoff at a pole
-     $east= $_POST['lng'] + 5/$latcorr;
-     if($east > 180) {
+$bounds=json_decode($_POST['bounds']);
+$latmargin=$_POST['margin']/$degdist;
+if(abs($bounds->north) > abs($bounds->south)) {
+$latref=$bounds->south;
+}
+else {
+$latref= $bounds->north;
+}
+$lngmargin=$latmargin/cos(deg2rad($latref));
+ $north=$bounds->north + $latmargin;
+$south= $bounds->south - $latmargin;;
+$east= $bounds->east + $lngmargin;
+if($east > 180) {
      $east= 360-$east;
      }
-     $west= $_POST['lng'] - 5/$latcorr;
-     if($west < -180) {
+$west=$bounds->west - $lngmargin;
+if($west < -180) {
      $west= 360 + $west;
      }
-    }
-    else {
-    $east=180;
-    $west=-180;
-    }
-  $box="POLYGON(($north $west,$north $east,$south $east,$south $west,$north $west))";
+//echo "$north $west,$north $east,$south $east,$south $west,$north $west";
+ $box="POLYGON(($north $west,$north $east,$south $east,$south $west,$north $west))";
   $sql="SET @bbox=GeomFromText('".$box."')";
   $mysqli->query($sql);
   $wherepolygons="INTERSECTS(outline,@bbox)";
