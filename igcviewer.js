@@ -11,6 +11,8 @@ var ns = (function($) {
   var startElevation;
   var altOffset;
   var barogramPlot = null;
+  var engineRuns={};
+  var turnRate=[];
   var timezone = {
     zonename: "Europe/London",
     zoneabbr: "UTC",
@@ -413,8 +415,8 @@ var ns = (function($) {
         }
         if(igcFile) {
             if(enlStatus.detect==='On') {
-               var engineRuns=getEngineRuns(igcFile,enlStatus);
-              mapControl.showEngineRuns(engineRuns);
+               engineRuns=getEngineState(igcFile,enlStatus);
+              mapControl.showEngineRuns(engineRuns.engineTrack);
             }
          else {
              mapControl.zapEngineRuns();
@@ -466,6 +468,7 @@ function setAltRefs() {
   function clearTask() {
     $('#taskbuttons').html("");
     $('#taskinfo').html("");
+    //$('#tasklength').text("");
      task=null;
     mapControl.clearTask();
   }
@@ -593,12 +596,12 @@ function setAltRefs() {
     });
    }
    
-   function getElevation() {
+   function getElevation(index) {
    return  $.ajax({
       url: "getelevation.php",
       data: {
-        lat: igcFile.latLong[0].lat,
-        lon: igcFile.latLong[0].lng
+        lat: igcFile.latLong[index].lat,
+        lon: igcFile.latLong[index].lng
       },
       timeout: 3000,
       method: "POST",
@@ -649,11 +652,10 @@ function setAltRefs() {
     displaySentence+="; " + positionText;
     if(igcFile.timeInterval*timeIndex > 30) {
       var climb=getClimb(timeIndex);
-       displaySentence+=";  vario: "+ climb +" " +climbUnits.descriptor;
+       displaySentence+=";  vario: "+ showval(climbUnits,climb);
     }
      $('#timePositionDisplay').html(displaySentence);
     mapControl.setTimeMarker(igcFile.latLong[timeIndex]);
-   
     var xval=1000*(igcFile.recordTime[timeIndex] + timezone.offset);
     var yval=(altValue + altOffset) * altUnits.multiplier;
     barogramPlot.lockCrosshair({
@@ -661,9 +663,95 @@ function setAltRefs() {
      y: yval
     });
   }
-   
 
-   
+function showPositionDetail(timeIndex) {
+    $.when(getElevation(timeIndex)).done(function(data,status) {
+        if(status==='success') {
+        var groundElevation=data.results[0].elevation;
+        var gliderAlt;
+        if(igcFile.hasPressure) {
+            gliderAlt=igcFile.pressureAltitude[timeIndex]-igcFile.pressureAltitude[0]+ startElevation;
+        }
+        else {
+            gliderAlt=igcFile.gpsAltitude[timeIndex]-igcFile.gpsAltitude[igcFile.takeOffGps]+ startElevation;
+        }
+        $('#heightAGL').text("Height above ground: " + showval(altUnits,gliderAlt-groundElevation));
+        }
+    });
+    var flightMode="";
+   var startPos=timeIndex- Math.ceil(30/igcFile.timeInterval); //30 second spread of data
+   //get average turn rate over ~last 30 secs
+   var cuSum=0;
+   var i;
+   var j;
+   for(i=startPos; i<=timeIndex;i++) {
+       cuSum+=turnRate[i];
+   }
+   //var avgeTurn=turnAvge(timeIndex,-30);
+   var avgeTurn=Math.abs(cuSum/(i-startPos));
+   if(avgeTurn > 4) {
+         $('#flightMode').text("Flight mode: Circling");
+         var circling=true;
+         var thermalDetail="Data for this thermal:<br>Height gain: ";
+         //assume if we are turning at less than 4 deg./sec for 15 seconds we are flying straight
+         var pointsToCheck=Math.ceil(15/igcFile.timeInterval);
+         i=timeIndex;
+         do {
+             i--;
+             if(Math.abs(turnRate[i]) < 5)
+             {
+                circling=false;
+                   for(j=1; j <= pointsToCheck; j++) {
+                     if(Math.abs(turnRate[i-j]) > 4) {
+                          circling=true;
+                     }
+                    }
+                 }
+             }
+         while(circling);
+          var thermalStartIndex=i;
+          i=timeIndex;
+         circling=true;
+         do {
+             i++;
+             if(Math.abs(turnRate[i]) < 5)
+             {
+                circling=false;
+                   for(j=1; j <= pointsToCheck; j++) {
+                     if(Math.abs(turnRate[i+j]) > 4) {
+                          circling=true;
+                     }
+                    }
+                 }
+             }
+         while(circling);
+          var thermalTopIndex=i;
+         var heightGain;
+         var climbTime= igcFile.recordTime[thermalTopIndex]-igcFile.recordTime[thermalStartIndex];
+        if(altSource==="baro") {
+           heightGain=igcFile.pressureAltitude[thermalTopIndex] -igcFile.pressureAltitude[thermalStartIndex]
+           }
+         else 
+               {
+                heightGain=igcFile.gpsAltitude[thermalTopIndex] -igcFile.gpsAltitude[thermalStartIndex]
+               }
+          thermalDetail += showval(altUnits, heightGain);
+          thermalDetail+="<br>Time taken: " +  Math.floor((climbTime/60)%60) + "mins " +pad(climbTime %60) + "secs<br><br>Average climb: ";
+           var thermalAvge=heightGain/climbTime;
+            thermalDetail+=showval(climbUnits,thermalAvge);
+           $('#flightdetail1').html(thermalDetail);
+}
+
+   if(avgeTurn < 2) {
+       $('#flightMode').text("Flight mode: Cruising");
+    if(startPos > 0) {
+      var cruiseInfo=topoint(igcFile.latLong[startPos],igcFile.latLong[timeIndex]);
+      var cruiseSpeed=3600*cruiseInfo.distance/(igcFile.recordTime[timeIndex]-igcFile.recordTime[startPos]);
+      $('#flightdetail1').text("Ground speed: " +showval(cruiseUnits, cruiseSpeed));
+    }
+   }
+}
+
    function loadAirspace(margin) {
     $.post("getairspace.php",
       {
@@ -690,7 +778,7 @@ function setAltRefs() {
            var i;
            var altValue=[];
            var elapsedTime;
-          var taskData=assessTask(igcFile,task,enlStatus,sectordefs);
+          var taskData=assessTask(igcFile,task,enlStatus,sectordefs,engineRuns);
           for(i=0;i<task.coords.length; i++) {
               $('#taskcalcs').append("<br/>" + task.labels[i] +": ");
               if(i < taskData.npoints) {
@@ -712,7 +800,6 @@ function setAltRefs() {
                $('#taskcalcs').append("<br/><br/>" + task.distance.toFixed(distanceUnits.precision) + " " +distanceUnits.descriptor +"  task completed");
                elapsedTime= igcFile.recordTime[taskData.turnIndices[taskData.npoints-1]]-igcFile.recordTime[taskData.turnIndices[0]];
                $('#taskcalcs').append("<br/>Elapsed time: " + Math.floor(elapsedTime/3600) + "hrs " +   pad(Math.floor((elapsedTime/60)%60)) + "mins " +pad(elapsedTime %60) + "secs");
-               //$('#taskcalcs').append("<br/>Speed: " +(3600* speedUnits.multiplier*task.distance/elapsedTime).toFixed(speedUnits.precision) + " " +speedUnits.descriptor); 
                $('#taskcalcs').append("<br/>Speed: " + showval(speedUnits,3600*task.distance/elapsedTime)); 
                $('#taskcalcs').append("<br/>Height loss: " +showval(altUnits,altValue[0]-altValue[task.coords.length-1]));
                if(altUnits.abbr !=='mt') {
@@ -720,11 +807,13 @@ function setAltRefs() {
                }
           }
           else {
+              if(taskData.npoints > 0) {
               $('#taskcalcs').append("<br/><br/>\"GPS Landing\" at: "+ getDisplayTime( igcFile.recordTime[taskData.bestPoint]));
               $('#taskcalcs').append("<br/>Position: " + pointDescription(igcFile.latLong[taskData.bestPoint]));
               $('#taskcalcs').append("<br/>Scoring distance: " + showval(distanceUnits,taskData.scoreDistance));
               mapControl.pushPin(igcFile.latLong[taskData.bestPoint]);
-          }
+              }
+            }
        }
        $('#taskcalcs').append("<br/><br/>Landing: " + getDisplayTime( igcFile.recordTime[igcFile.landingIndex]));
        var flightSeconds= igcFile.recordTime[igcFile.landingIndex]-  igcFile.recordTime[igcFile.takeOffIndex];
@@ -737,7 +826,7 @@ function displayIgc() {
         altSource="gps";
     }
     //Call this first as process is asynchronous- can run while the map is being drawn
-   $.when(gettimezone(),getElevation()).done(function(tzargs,elargs){
+   $.when(gettimezone(),getElevation(0)).done(function(tzargs,elargs){
       if(tzargs[0].status==='OK') {
         timezone.zoneabbr = tzargs[0].timeZoneName.match(/[A-Z]/g).join('');
         timezone.offset = parseFloat(tzargs[0].rawOffset) + parseFloat(tzargs[0].dstOffset);
@@ -775,16 +864,21 @@ function displayIgc() {
         $('#flightinfo').show();
         $('#timeSlider').prop('max', igcFile.recordTime.length - 1);
         if ((igcFile.taskpoints.length > 4) && (  $('input[type=radio][name=tasksource]').filter(':checked').val()==="infile")) {
+            $('#task').hide();
            clearTask();
             task= getFileTask();
-            showTask();
+            if(task) {
+               showTask();
+            }
         }
      mapControl.setBounds(igcFile.bounds);
   if (enlStatus.detect === 'On') {
-       var engineRuns=getEngineRuns(igcFile,enlStatus);
-       mapControl.showEngineRuns(engineRuns);
+        engineRuns=getEngineState(igcFile,enlStatus);
+        //alert(JSON.stringify(engineRuns.engineTrack));
+       mapControl.showEngineRuns(engineRuns.engineTrack);
     }
    loadAirspace(20);  //Show airspace in track bounding rectangle + 20 Km margin
+     turnRate=getTurnRate(igcFile);
   }
   
 $(document).ready(function() {
@@ -941,11 +1035,13 @@ $(document).ready(function() {
     // 'input' for Chrome and Firefox in order to update smoothly
     // as the range input is dragged.
     $('#timeSlider').on('input', function() {
+     $('#positionDetail').hide();
       var t = parseInt($(this).val(), 10);
       updateTimeline(t);
     });
     
     $('#timeSlider').on('change', function() {
+        $('#positionDetail').hide();
       var t = parseInt($(this).val(), 10);
       updateTimeline(t);
     });
@@ -953,6 +1049,7 @@ $(document).ready(function() {
      $('#barogram').on('plotclick', function(event, pos, item) {
       if (item) {
         updateTimeline(item.dataIndex);
+         showPositionDetail(item.dataIndex);
         $('#timeSlider').val(item.dataIndex);
       }
     });
@@ -961,9 +1058,6 @@ $(document).ready(function() {
       mapControl.setBounds(igcFile.bounds);
     });
     
-     $('#testbutton').click(function() {
-         loadAirspace(20);
-     });
 
      $('#analyse').click(function() {
       if(igcFile) {
@@ -975,6 +1069,12 @@ $(document).ready(function() {
       $(this).parent().hide();
     });
      
+      $('#moreData').click(function() {
+          $('#positionDetail').show();
+         var t = parseInt($('#timeSlider').val(), 10);
+         showPositionDetail(t);
+      });
+      
       $('input[type=radio][name=tasksource]').change(function() {
        $('#taskentry').hide();
         $('#task').hide();

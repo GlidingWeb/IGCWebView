@@ -137,8 +137,11 @@
             <div id="slider">
                 <label for="timeSlider">Time:</label>
                 <input type="range" id="timeSlider" step="1" value="0" min="0" max="100" />
+              </div>
+              <div>
+                <button class="floatright" id="moreData">More...</button>
                 <p id="timePositionDisplay"></p>
-            </div>
+           </div>
             <p>Zoom:
                 <button id="zoomtrack">Track</button>&nbsp;&nbsp;<span id="taskbuttons"></span><button id="analyse">&nbsp;&nbsp; Analyse task</button></p>
         </div>
@@ -240,6 +243,12 @@
          <p><button  id="althelp">Help</button></p>
          <button id="restorealtref">Cancel</button>
          <button id="applyaltref" class="floatright">Apply</button>
+      </div>
+       <div id='positionDetail'>
+       <p id="heightAGL"></p>
+        <p id="flightMode"></p>
+        <p id="flightdetail1"></p>
+           <button class="closewindow">Close</button>
       </div>
 </body>
 

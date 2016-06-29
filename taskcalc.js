@@ -3,17 +3,7 @@ var EARTHRAD = 6378; //  Earth radius km
  function pad(n) {
     return (n < 10) ? ("0" + n.toString()) : n.toString();
   }
-  /*
-  function getHrMinSec(interval) {  // converts seconds to hours, minutes, seconds
-     return pad(Math.floor(interval / 3600)) + ":" + pad(Math.floor((interval/60)%60)) + ":" +pad(interval %60);
- }
-
-function formatTime(unixTime) {
-    var timeobj = new Date(1000*unixTime);
-    var retval=timeobj.getUTCHours()+ ':' + pad(timeobj.getUTCMinutes()) + ':' + pad(timeobj.getSeconds());
-    return retval;
-}
-*/
+  
  function targetPoint(start, distance, bearing) {
     var lat1 = start.lat * Math.PI / 180;
     var lng1 = start.lng * Math.PI / 180;
@@ -401,6 +391,9 @@ function getPoint(instr) {
       i++;
     }
     while (i < sectionEnd);
+    if(bestSoFar===0) {  //allow for crossing start line than going backwards
+        curLeg=0;
+    }
     return {
       npoints: curLeg,
       turnIndices: tpindices,
@@ -409,23 +402,39 @@ function getPoint(instr) {
     };
   }
   
-  function assessTask(igcFile,task,enlStatus,sectordefs) {
+  function assessTask(igcFile,task,enlStatus,sectordefs,engineRuns) {
       var assessment;
       var sectorLimits=getSectorLimits(task,sectordefs);
-       if (enlStatus.detect==='Off') {
+      var tempAssess;
+      var bestLength=0;
+      var i;
+       if ((enlStatus.detect==='Off') || (engineRuns.length===0)) {
           assessment=assessSection(igcFile,task,igcFile.takeOffIndex, igcFile.landingIndex,sectorLimits,sectordefs);
     }
+    else {
+        for(i =0; i< engineRuns.glidingRuns.start.length; i++) {
+            tempAssess=assessSection(igcFile,task,engineRuns.glidingRuns.start[i],engineRuns.glidingRuns.end[i],sectorLimits,sectordefs);
+            if(tempAssess.scoreDistance > bestLength) {
+                bestLength=tempAssess.scoreDistance;
+                assessment=tempAssess;
+            }
+        }
+        }
     return assessment;
   }
-  
- function getEngineRuns(igcFile,enl) {
-    var i = 0;
+
+  function getEngineState(igcFile,enl) {
+      var i = 0;
     var startIndex = null;
     var endIndex;
     var timeInterval;
     var engineRun = [];
     var runList= [];
-
+    var glidingRuns= {
+         start: [],
+        end: []
+     };
+      glidingRuns.start.push(0);
   do {
     if (igcFile.enl[i] > enl.threshold) {
         engineRun.push(igcFile.latLong[i]);
@@ -437,6 +446,8 @@ function getPoint(instr) {
          if(startIndex!==null) {
              timeInterval = igcFile.recordTime[i - 1] - igcFile.recordTime[startIndex];
              if (timeInterval >=  enl.duration) {
+                glidingRuns.end.push(startIndex);
+                glidingRuns.start.push(i);
                  runList.push(engineRun);
              }
              engineRun=[];
@@ -445,6 +456,35 @@ function getPoint(instr) {
      }
           i++;
       }
-      while (i < igcFile.latLong.length);
-      return runList;
+      while (i < igcFile.landingIndex);  //ignore taxying post landing
+      glidingRuns.end.push(igcFile.landingIndex);
+      return {
+             engineTrack: runList,
+             glidingRuns: glidingRuns
+            };
  }
+ 
+function getTurnRate(igcFile) {
+       var turnRate=[];
+      var i;
+      var j;
+      var deltaBearing;
+      var whereGoing;
+      var preVector=topoint(igcFile.latLong[0],igcFile.latLong[1]);
+      var prevBearing=preVector.bearing;
+      var firstVector;
+      var snapTurn;
+      turnRate[0]=0;
+      for(i=1; i < igcFile.recordTime.length ; i++) {
+          whereGoing=topoint(igcFile.latLong[i-1], igcFile.latLong[i]);
+          deltaBearing= Math.round((360+ whereGoing.bearing-prevBearing)%360);
+          prevBearing=whereGoing.bearing;
+         if(Math.abs(deltaBearing) > 180) {
+              deltaBearing -= 360;
+            }
+            snapTurn=deltaBearing/(igcFile.recordTime[i]-igcFile.recordTime[i-1]);
+           turnRate.push(snapTurn);
+      }
+      return turnRate;
+ }
+ 
