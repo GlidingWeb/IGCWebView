@@ -108,27 +108,25 @@ function createMapControl(elementName) {
   var initBounds;
   var airspace = {};
 
-  var mapQuestAttribution = ' | Tiles Courtesy of <a href="http://www.mapquest.com/" target="_blank">MapQuest</a> <img src="http://developer.mapquest.com/content/osm/mq_logo.png">';
+  var cartoAttribution = '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://cartodb.com/attributions">CartoDB</a>';
   var mapLayers = {
-    openStreetMap: L.tileLayer('http://otile1.mqcdn.com/tiles/1.0.0/map/{z}/{x}/{y}.jpg', {
-      attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>' +
-        mapQuestAttribution,
+    positron: L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png', {
+      attribution: cartoAttribution,
       maxZoom: 18
     }),
 
-    photo: L.tileLayer('http://otile1.mqcdn.com/tiles/1.0.0/sat/{z}/{x}/{y}.jpg', {
-      attribution: 'Portions Courtesy NASA/JPL-Caltech and U.S. Depart. of Agriculture, Farm Service Agency' +
-        mapQuestAttribution,
-      maxZoom: 11
+    darkMatter: L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', {
+      attribution: cartoAttribution,
+      maxZoom: 18
     })
   };
 
   var layersControl = L.control.layers({
-    'MapQuest OpenStreetMap': mapLayers.openStreetMap,
-    'MapQuest Open Aerial (Photo)': mapLayers.photo
+    'Carto Positron': mapLayers.positron,
+    'Carto Dark Matter': mapLayers.darkMatter
   });
 
-  mapLayers.openStreetMap.addTo(map);
+  mapLayers.positron.addTo(map);
   layersControl.addTo(map);
   var trackLatLong = [];
   var timePositionMarker;
