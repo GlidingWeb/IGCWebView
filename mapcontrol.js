@@ -118,12 +118,24 @@ function createMapControl(elementName) {
     darkMatter: L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', {
       attribution: cartoAttribution,
       maxZoom: 18
+    }),
+
+    toner: L.tileLayer('https://stamen-tiles-{s}.a.ssl.fastly.net/toner/{z}/{x}/{y}.png', {
+      attribution: 'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.',
+      maxZoom: 18
+    }),
+
+    watercolor: L.tileLayer('https://stamen-tiles-{s}.a.ssl.fastly.net/watercolor/{z}/{x}/{y}.png', {
+      attribution: 'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://creativecommons.org/licenses/by-sa/3.0">CC BY SA</a>.',
+      maxZoom: 18
     })
   };
 
   var layersControl = L.control.layers({
     'Carto Positron': mapLayers.positron,
-    'Carto Dark Matter': mapLayers.darkMatter
+    'Carto Dark Matter': mapLayers.darkMatter,
+    'Stamen Toner': mapLayers.toner,
+    'Stamen Watercolor': mapLayers.watercolor
   });
 
   mapLayers.positron.addTo(map);
