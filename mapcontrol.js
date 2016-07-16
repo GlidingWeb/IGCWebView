@@ -63,7 +63,7 @@ var myStyles =[
   }  
     
 function getLineBounds(line) {
-  var bounds = new google.maps.LatLngBounds;
+  var bounds = new google.maps.LatLngBounds();
   line.getPath().forEach(function(latLng) {
     bounds.extend(latLng);
   });
