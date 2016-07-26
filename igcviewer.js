@@ -807,8 +807,7 @@ var ns = (function ($) {
     //Call this first as process is asynchronous- can run while the map is being drawn
     $.when(gettimezone(), getElevation(0)).done(function (tzargs, elargs) {
         if (tzargs[0].status === 'OK') {
-          timezone.zoneabbr = tzargs[0].timeZoneName.match(/[A-Z]/g)
-            .join('');
+          timezone.zoneabbr = tzargs[0].timeZoneName.match(/[A-Z]/g).join('');
           timezone.offset = parseFloat(tzargs[0].rawOffset) + parseFloat(tzargs[0].dstOffset);
           timezone.zonename = tzargs[0].timeZoneName;
         } else {
@@ -869,7 +868,15 @@ var ns = (function ($) {
       setEnl();
       setAltRefs();
       window.name = "igcview";
-
+      
+      $('#help').click(function () {
+          window.open("igchelp.html", "_blank");
+        });
+      
+       $('#about').click(function () {
+          window.open("igcabout.html", "_blank");
+        });
+      
       $('#fileControl').change(function () {
           if (this.files.length > 0) {
             var reader = new FileReader();

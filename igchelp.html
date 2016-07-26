@@ -11,7 +11,7 @@
 <body>
     <div id='titlediv'>
         <h1>IGC Webview User Instructions</h1>
-        <p> &copy; 2015 Alistair Malcolm Green and Richard Brisbourne </p>
+        <p> &copy; 2016 Alistair Malcolm Green and Richard Brisbourne </p>
     </div>
     <div class="content">
         <p>
@@ -49,8 +49,8 @@
         <h2>Moving round the track</h2>
         <p>
             Use the slider control below the map to move the aircraft icon round the track. The text below the map will give the time
-            and your position and altitude, and the crosshairs on the barogram will also show altitude and time flight. Times
-            are time zone adjusted. If you find the aircraft is moving round too quickly for you and you have a keyboard,
+            and your position,  altitude, and a 30 second climb/sink rate. The crosshairs on the barogram will also show altitude and time. Times
+            are time zone adjusted.  Further information (height above terrain, and if you are circling, average climb for the thermal you are in) can be obtained by clicking the "More" button.  If you find the aircraft is moving round too quickly for you and you have a keyboard,
             you can move it using the arrow keys, but you need to click on the slider first to give it focus. You can also
             click on the barogram; the glider will move to the point you've clicked on.
         </p>
@@ -85,7 +85,7 @@
         <a name='alt' />
         <h2>Altitude reference setting</h2>
         <p>IgcWebView lets you define how altitude or height is calculated and displayed.  To configure this click on the "Altitude ref." button.
-        <p>IGC loggers record pressure altitude referenced to the international standard of 1013.25 millibars- the same value you set your altimeter to show flight levels.  How this relates to your altitude depends on the weather.  This is the default for the application, shown as "std". </p>
+        <p>IGC loggers record pressure altitude referenced to the international standard of 1013.25 millibars- the same value you set your altimeter to to show flight levels.  How this relates to your altitude depends on the weather.  This is the default for the application, shown as "std". </p>
         <p>As an alternative you can elect to show height above your take-off point, selected as "QFE takeoff" and displayed as "QFE".  </p>
         <p>Another option is to select "QNH", notionally height above sea level.  The application looks up the height above sea level at your takeoff point using Google's elevation API and makes the necessary adjustment.  Accuracy is dependant on the precision of Google's mapping, but most airfields are flat, and on tests so far it works well. </p>
         <p>You may also choose between using pressure or GPS data sources.  It is strongly advised you use pressure, the default setting.  The application will fall back to using GPS altitude if pressure isn't available- if pressure is set as a preference it will warn you when doing this.</p>
@@ -94,7 +94,7 @@
         <p>
            The defaults in the program are as follows:
            <ul>
-           <li>Start:  A line radius 5 Km (ie: 10 Km long) centred at the start point, at right angle to the first leg.</li>
+           <li>Start:  A line radius 5 Km (ie: 10 Km long) centred at the start point, at right angles to the first leg.</li>
            <li>Turning points: A circle 0.5 Km radius centred on the point, <b> plus</b> a sector 20 Km radius subtending an angle of 90&deg; remote from and centred on the bisector of the tracks in and out (the "FAI thistle").</li>
            <li>Finish: A line of 1 Km radius at right angles to the last leg centred on the finish point.</li>
            </ul>
@@ -103,7 +103,7 @@
        <a name='enl' />
         <h2>Engine detection</h2>
         <p>
-        By default, IGCWebview ignores any detection of engine runs.  If you don't actually want engine detection, you are advised to leave it like that.  If on the other hand you want to see when the engine was running, and have it taken into account in task evaluation, click on the "Engine" button, and select "ENL engine detect" "On".  There are also some configuration options- the defaults wil work for most flights but they are provided in case you need them.
+        By default, IGCWebview ignores any detection of engine runs.  If you don't actually want engine detection, you are advised to leave it like that.  If on the other hand you want to see when the engine was running, and have it taken into account in task evaluation, click on the "Engine" button, and select "ENL engine detect" "On".  There are also some configuration options- the defaults will work for most flights but they are provided in case you need them.
         </p>
         <p>To explain further we need to get technical.  The usual method of testing for an engine run is by a sensor in the logger picking up environmental noise level ("ENL") and recording it alongside each position fix.  This enters the log as a number between 0 and 999.  Unfortunately the actual number obtained will depend on how noisy the engine is, how noisy the glider is (and it can be very noisy at 100 knots with the clear vision panel open), the actual sensor used and its position.    In some cases looking at a graph of ENL against time it's easy to see when the engine's running, sometime it isn't.  Also a noisy glider can have a higher ENL recorded  than a quiet one with the engine running.  Competition rules get round this by mandating a short calibration run before the start line, we can't count on that. If the default threshold value doesn't work for you you have the option of changing it.  With engine detection enabled the ENL is shown on a seperate plot on the barogram, with a horizontal line showing the position of the threshold; this will help you see what is happening.
         </p>

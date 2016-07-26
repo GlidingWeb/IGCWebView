@@ -87,7 +87,6 @@ function getTargetLine(start, end) {
         strokeWeight: 1,
         fillColor: 'green',
         fillOpacity: 0.1,
-        map: map,
         center: centre,
         radius: radius * 1000
       });

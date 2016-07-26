@@ -167,47 +167,6 @@ function parsePosition(positionRecord, model, readEnl) {
         noise: noiseLevel
       };
     }
-
-    /*
-            // Convert the time to a date and time. Start by making a clone of the date
-            // object that represents the date given in the headers:
-            var positionTime = new Date(flightDate.getTime());
-            positionTime.setUTCHours(parseInt(positionMatch[1], 10), parseInt(positionMatch[2], 10), parseInt(positionMatch[3], 10));
-            // If the flight crosses midnight (UTC) then we now have a time that is 24 hours out.
-            // We know that this is the case if the time is earlier than the first position fix.
-            if (model.recordTime.length > 0 &&
-                model.recordTime[0] > positionTime) {
-                positionTime.setDate(flightDate.getDate() + 1);
-            }
-            if(readEnl !==null) {
-                noiseLevel=parseInt(positionRecord.substring(readEnl.start,readEnl.end));
-            }
-            else {
-                noiseLevel=0;
-            }
-           var  position=parseLatLong(positionMatch[4]);
-         if((position.lat !==0) && (position.lng !==0)) {
-            if(position.lat > model.bounds.north) {
-               model.bounds.north=position.lat;
-            }
-             if(position.lat < model.bounds.south) {
-                model.bounds.south=position.lat;
-           }
-             if(position.lng > model.bounds.east) {
-                model.bounds.east=position.lng;
-            }
-             if(position.lng < model.bounds.west) {
-                model.bounds.west=position.lng;
-            }
-            return {
-                recordTime: positionTime,
-                latLong:  position,
-                pressureAltitude: parseInt(positionMatch[6], 10),
-                gpsAltitude: parseInt(positionMatch[7], 10),
-                noise: noiseLevel
-            };
-         }
-         */
   }
 }
 
