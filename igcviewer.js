@@ -1,35 +1,334 @@
-/* global L */
-/* global jQuery */
-var ns = (function($) {
+var ns = (function ($) {
   'use strict';
+  var sectordefs = {};
+  var enlStatus = {};
+  var altRef;
+  var altSource;
+  var mapControl;
+  var task = null;
   var igcFile = null;
+  var planWindow;
+  var startElevation;
+  var altOffset;
   var barogramPlot = null;
-  var altitudeConversionFactor = 3.2808399; // Conversion from metres to required units
+  var engineRuns = {};
+  var turnRate = [];
   var timezone = {
     zonename: "Europe/London",
     zoneabbr: "UTC",
     offset: 0,
     dst: false
   };
-  var task = null;
-  var sectordefs = {};
-  var mapControl;
 
+  function showval(converter, value) {
+    var conValue = converter.multiplier * value;
+    return conValue.toFixed(converter.precision) + converter.descriptor;
+  }
 
-  function loadAirspace() {
-    $.post("getairspace.php",
-      {
-        lat: igcFile.latLong[0][0],
-        lng: igcFile.latLong[0][1]
+  function getAltOffset() {
+    var baseAlt;
+    var offset;
+    var i = -1;
+
+    if (altRef === 'std') {
+      offset = 0;
+    } else {
+      if (altSource === 'baro') {
+        baseAlt = igcFile.pressureAltitude[0]; //assume pressure altititude in every record from the start
+      } else { //find first 3D fix
+        do {
+          i++;
+        }
+        while ((igcFile.fixQuality[i] !== 'A') || (i > (igcFile.fixQuality.length - 1))); //allow for badly formed file
+        baseAlt = igcFile.gpsAltitude[i];
+      }
+      offset = -baseAlt;
+      if (altRef === 'QNH') {
+        offset = startElevation - baseAlt;
+      }
+    }
+    return offset;
+  }
+
+  function plotBarogram() {
+    var nPoints = igcFile.recordTime.length;
+    var barogramData = [];
+    var enlData = [];
+    var j;
+    var timestamp;
+    var enlLabel;
+    var showEnl;
+    var altitudeLabel;
+    var plotColour;
+
+    if (enlStatus.detect === 'Off') {
+      showEnl = false;
+      enlLabel = '';
+    } else {
+      showEnl = true;
+      enlLabel = 'ENL';
+    }
+    var startTime = 1000 * (igcFile.recordTime[0] + timezone.offset);
+    for (j = 0; j < nPoints; j++) {
+      timestamp = 1000 * (igcFile.recordTime[j] + timezone.offset);
+      if (altSource === "baro") {
+        barogramData.push([timestamp, (igcFile.pressureAltitude[j] + altOffset) * altUnits.multiplier]);
+      } else {
+        if (igcFile.fixQuality[j] === 'A') { //if using gps altitude ignore 2D fixes
+          barogramData.push([timestamp, (igcFile.gpsAltitude[j] + altOffset) * altUnits.multiplier]);
+        }
+      }
+      enlData.push([timestamp, igcFile.enl[j]]);
+    }
+    if (altSource === "baro") {
+      altitudeLabel = "Pressure Altitude";
+      plotColour = '#FF0000';
+      switch (altRef) {
+      case "QFE":
+        altitudeLabel += " (QFE takeoff)";
+        break;
+      case "QNH":
+        altitudeLabel += " (QNH)";
+        break;
+      case "std":
+        altitudeLabel += " (ref 1013mb)";
+        break;
+      }
+    } else {
+      altitudeLabel = "GPS Altitude";
+      plotColour = '#8080FF';
+      switch (altRef) {
+
+      case "QFE":
+        altitudeLabel += " (rel. takeoff)";
+        break;
+      case "QNH":
+        altitudeLabel += " (rel.msl)";
+        break;
+      case "std":
+        altitudeLabel += " (file data)";
+        break;
+      }
+    }
+    var baro = $.plot($('#barogram'), [{
+      label: enlLabel,
+      data: enlData,
+      yaxis: 2,
+      bars: {
+        show: showEnl
       },
-      function(data, status) {
-        if (status === 'success') {
-          mapControl.setAirspace(data);
-        }
-        else {
-          alert("Airspace load failed");
-        }
-      }, "json");
+      lines: {
+        show: false
+      },
+      color: '#D0D0FF'
+    }, {
+      label: altitudeLabel,
+      data: barogramData,
+      color: plotColour
+    }, {
+      label: '',
+      data: [
+        [startTime, 0],
+        [timestamp, 0]
+      ],
+      color: '#000000',
+      yaxis: 2,
+      lines: {
+        show: showEnl
+      }
+    }], {
+      axisLabels: {
+        show: true
+      },
+      xaxes: [{
+        mode: 'time',
+        timeformat: '%H:%M',
+        axisLabel: 'Time (' + timezone.zonename + ')'
+      }],
+      yaxes: [{
+        axisLabel: 'Altitude / ' + altUnits.descriptor
+      }, {
+        position: "right",
+        axisLabel: 'Environmental Noise Level',
+        min: 20,
+        max: 4000,
+        show: showEnl,
+        ticks: [0, 500, 1000]
+      }],
+      crosshair: {
+        mode: 'xy'
+      },
+      grid: {
+        clickable: true,
+        autoHighlight: false
+      }
+    });
+    return baro;
+  }
+
+  function storePreference(name, value) {
+    if (window.localStorage) {
+      try {
+        localStorage.setItem(name, value);
+      } catch (e) {
+        // If permission is denied, ignore the error.
+      }
+    }
+  }
+
+  function getStoredValues() {
+    try {
+      var storedAltitudeUnit = localStorage.getItem("altitudeUnit");
+      if (storedAltitudeUnit) {
+        $('#altitudeunits').val(storedAltitudeUnit);
+      }
+      var storedClimbUnit = localStorage.getItem("climbUnit");
+      if (storedClimbUnit) {
+        $('#climbunits').val(storedClimbUnit);
+      }
+      var storedCruiseUnit = localStorage.getItem("cruiseUnit");
+      if (storedCruiseUnit) {
+        $('#cruiseunits').val(storedCruiseUnit);
+      }
+      var storedTaskUnit = localStorage.getItem("taskUnit");
+      if (storedTaskUnit) {
+        $('#taskunits').val(storedTaskUnit);
+      }
+      var storedLengthUnit = localStorage.getItem("lengthUnit");
+      if (storedLengthUnit) {
+        $('#lengthunits').val(storedLengthUnit);
+      }
+      var storedSectorDefs = localStorage.getItem("sectors");
+      if (storedSectorDefs) {
+        sectordefs = JSON.parse(storedSectorDefs);
+      }
+      var storedEnl = localStorage.getItem("enl");
+      if (storedEnl) {
+        enlStatus = JSON.parse(storedEnl);
+      }
+      var storedAltRef = localStorage.getItem("altRef");
+      if (storedAltRef) {
+        $("input[name='alttype']").val([storedAltRef]);
+      }
+      var storedAltSource = localStorage.getItem("altSource");
+      if (storedAltSource) {
+        $("input[name='altsource']")
+          .val([storedAltSource]);
+      }
+      var storedAirspaceClip = localStorage.getItem("airspaceClip");
+      if (storedAirspaceClip) {
+        $('#airclip').val(storedAirspaceClip);
+      }
+    } catch (e) {
+      // If permission is denied, ignore the error.
+    }
+  }
+
+  //Set up user defined units 
+
+  var altUnits = {};
+  var climbUnits = {};
+  var cruiseUnits = {};
+  var speedUnits = {};
+  var distanceUnits = {};
+
+  function setConverter(unitObj, descriptor, multiplier, precision, abbr) {
+    unitObj.descriptor = descriptor;
+    unitObj.multiplier = multiplier;
+    unitObj.precision = precision;
+    unitObj.abbr = abbr;
+  }
+
+  function applyUnits() {
+    //Conversion factors
+    var METRE2FOOT = 3.2808399;
+    var MPS2KNOT = 1.9426025694;
+    var MPS2FPM = 196.8503937;
+    var KPH2KNOT = 0.53961182484;
+    var KM2MILES = 0.62137119224;
+
+    switch ($('#altitudeunits').val()) {
+    case "ft":
+      setConverter(altUnits, " feet", METRE2FOOT, 0, "ft");
+      break;
+    case "mt":
+      setConverter(altUnits, " metres", 1, 0, "mt");
+      break;
+    }
+
+    switch ($('#climbunits').val()) {
+    case "kt":
+      setConverter(climbUnits, " knots", MPS2KNOT, 1, "kt");
+      break;
+    case "mps":
+      setConverter(climbUnits, " m/s", 1, 1, "mps");
+      break;
+    case "fpm":
+      setConverter(climbUnits, " ft/min", MPS2FPM, 0, "fpm");
+      break;
+    }
+
+    switch ($('#cruiseunits').val()) {
+    case "kt":
+      setConverter(cruiseUnits, " knots", KPH2KNOT, 0, "kt");
+      break;
+    case "kph":
+      setConverter(cruiseUnits, " km/hr", 1, 0, "kph");
+      break;
+    case "mph":
+      setConverter(cruiseUnits, " miles/hr", KM2MILES, 0, "mph");
+      break;
+    }
+
+    switch ($('#taskunits').val()) {
+    case "kph":
+      setConverter(speedUnits, " km/hr", 1, 2, "kph");
+      break;
+    case "mph":
+      setConverter(speedUnits, " miles/hr", KM2MILES, 2, "mph");
+      break;
+    }
+    switch ($('#lengthunits').val()) {
+    case "km":
+      setConverter(distanceUnits, " Km", 1, 1, "km");
+      break;
+    case "miles":
+      setConverter(distanceUnits, " Miles", KM2MILES, 2, "miles");
+      break;
+    }
+    if (task !== null) {
+      showTaskLength(task.distance);
+    }
+    if (igcFile !== null) {
+      barogramPlot = plotBarogram();
+      var t = parseInt($('#timeSlider').val(), 10);
+      updateTimeline(t, mapControl);
+    }
+    storePreference("altitudeUnit", $('#altitudeunits').val());
+    storePreference("climbUnit", $('#climbunits').val());
+    storePreference("cruiseUnit", $('#cruiseunits').val());
+    storePreference("taskUnit", $('#taskunits').val());
+  }
+
+  function restoreUnits() {
+    $('#altitudeunits').val(altUnits.abbr);
+    $('#climbunits').val(climbUnits.abbr);
+    $('#cruiseunits').val(cruiseUnits.abbr);
+    $('#taskunits').val(speedUnits.abbr);
+    $('#lengthunits').val(distanceUnits.abbr);
+  }
+  //end of user defined units
+
+  //User defined tp sectors
+  function setSectorDefaults() {
+    sectordefs.startrad = 5; //start line radius
+    sectordefs.finrad = 1; //finish line radius
+    sectordefs.tprad = 0.5; //'beer can' radius
+    sectordefs.sector_rad = 20; //tp sector radius
+    sectordefs.sector_angle = 90; //tp sector
+    sectordefs.use_sector = true;
+    sectordefs.use_barrel = true;
+    sectordefs.finishtype = "line";
   }
 
   function showSectors() {
@@ -44,29 +343,7 @@ var ns = (function($) {
     $("input[name=finishtype][value=" + value + "]").prop('checked', true);
   }
 
-  function setSectors() {
-    sectordefs.startrad = $('#startrad').val();
-    sectordefs.finrad = $('#finishrad').val();
-    sectordefs.tprad = $('#tpbarrelrad').val();
-    sectordefs.sector_rad = $('#tpsectorrad').val();
-    sectordefs.sector_angle = $('#subtends').val();
-    sectordefs.use_barrel = $('#tpbarrel').prop("checked");
-    sectordefs.use_sector = $('#tpsector').prop("checked");
-    sectordefs.finishtype = $("input[name='finishtype']:checked").val();
-  }
-
-  function setSectorDefaults() {
-    sectordefs.startrad = 5; //start line radius
-    sectordefs.finrad = 1; //finish line radius
-    sectordefs.tprad = 0.5; //'beer can' radius
-    sectordefs.sector_rad = 20; //tp sector radius
-    sectordefs.sector_angle = 90; //tp sector
-    sectordefs.use_sector = true;
-    sectordefs.use_barrel = true;
-    sectordefs.finishtype = "line";
-  }
-
-  function realityCheck() {
+  function sectorsRealityCheck() {
     var configerror = "";
 
     if (!($('#startrad').val() > 0)) {
@@ -81,7 +358,8 @@ var ns = (function($) {
     if (($('#tpbarrel').prop('checked')) && (!($('#tpbarrelrad').val() > 0))) {
       configerror += "\nTP circle radius needed";
     }
-    if (($('#tpsector').prop('checked')) && (!($('#tpsectorrad').val() > 0))) {
+    if (($('#tpsector').prop('checked')) && (!($('#tpsectorrad')
+        .val() > 0))) {
       configerror += "\nTP sector radius needed";
     }
     if (configerror.length > 0) {
@@ -92,616 +370,103 @@ var ns = (function($) {
     }
   }
 
-  function topoint(start, end) {
-    var earthrad = 6378; //  Earth radius km
-    var degLat1;
-    var degLng1;
-    var degLat2;
-    var degLng2;
-    if (start.hasOwnProperty("lat")) {
-      degLat1 = start.lat;
-      degLng1 = start.lng;
-    } else {
-      degLat1 = start[0];
-      degLng1 = start[1];
+  function setSectors() {
+    sectordefs.startrad = $('#startrad').val();
+    sectordefs.finrad = $('#finishrad').val();
+    sectordefs.tprad = $('#tpbarrelrad').val();
+    sectordefs.sector_rad = $('#tpsectorrad').val();
+    sectordefs.sector_angle = $('#subtends').val();
+    sectordefs.use_barrel = $('#tpbarrel').prop("checked");
+    sectordefs.use_sector = $('#tpsector').prop("checked");
+    sectordefs.finishtype = $("input[name='finishtype']:checked").val();
+    if (task !== null) {
+      addSectors();
     }
-    if (end.hasOwnProperty("lat")) {
-      degLat2 = end.lat;
-      degLng2 = end.lng;
-    } else {
-      degLat2 = end[0];
-      degLng2 = end[1];
-    }
-    var lat1 = degLat1 * Math.PI / 180;
-    var lat2 = degLat2 * Math.PI / 180;
-    var lon1 = degLng1 * Math.PI / 180;
-    var lon2 = degLng2 * Math.PI / 180;
-    var deltaLat = lat2 - lat1;
-    var deltaLon = lon2 - lon1;
-    var a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
-    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    var d = earthrad * c;
-    var y = Math.sin(lon2 - lon1) * Math.cos(lat2);
-    var x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
-    var brng = (360 + Math.atan2(y, x) * 180 / Math.PI) % 360;
-    return {
-      distance: d,
-      bearing: brng
-    };
   }
 
-  function getSectorLimits() {
-    var i;
-    var heading;
-    var bearingOut;
-    var bisector;
-    var legheadings = [];
-    var sectorLimits = [];
-    for (i = 1; i < task.coords.length; i++) {
-      heading = topoint(task.coords[i - 1], task.coords[i]).bearing;
-      legheadings.push(heading);
-    }
-    for (i = 0; i < task.coords.length; i++) {
-      var limits = {};
-      switch (i) {
-        case 0: //start zone
-          heading = legheadings[0];
-          limits.max = heading - 90;
-          limits.min = heading + 90;
-          break;
-        case task.coords.length - 1: //finish line
-          heading = legheadings[i - 1];
-          limits.max = heading + 90;
-          limits.min = heading - 90;
-          break;
-        default:
-          if (sectordefs.use_sector) {
-            bearingOut = (legheadings[i] + 180) % 360;
-            bisector = legheadings[i - 1] + (bearingOut - legheadings[i - 1]) / 2;
-            if (Math.abs(bearingOut - legheadings[i - 1]) > 180) {
-              bisector = (bisector + 180) % 360;
-            }
-            limits.max = bisector + sectordefs.sector_angle / 2;
-            limits.min = bisector - sectordefs.sector_angle / 2;
-          }
-      }
-      limits.max = (limits.max + 360) % 360;
-      limits.min = (limits.min + 360) % 360;
-      sectorLimits.push(limits);
-    }
-    return sectorLimits;
+  //end of sector definition
+  //start of enl section
+
+  function setEnlDefaults() {
+    enlStatus.threshold = 500;
+    enlStatus.duration = 12;
+    enlStatus.detect = 'Off';
   }
 
-  function checksector(target, comparison) {
-    var min = comparison.min;
-    var max = comparison.max;
-    if (min > max) {
-      max += 360;
-      if (target < comparison.max) {
-        target += 360;
-      }
-    }
-    return ((target > min) && (target < max));
+  function showEnlStatus() {
+    $("input[name=enldetect][value=" + enlStatus.detect + "]").prop('checked', true);
+    $('#enlthreshold').val(enlStatus.threshold);
+    $('#enltime').val(enlStatus.duration);
+    $('#enl').html("Engine (" + enlStatus.detect + ")");
   }
 
-  function analyseTask(mapControl) {
-    var flying = false;
-    var distInterval;
-    var groundspeed;
-    var takeoffTime;
-    var i = 1;
-    var startstatus;
-    var nextstatus;
-    var tpindices = [];
-    var turned;
-    var j;
-    var tpAlt;
-    var timestamp;
-    var legName;
-    var bestIndex;
-    var distanceToNext;
-    var currentDistance;
-    var startIndexLatest;
-    var startTime;
-    var finishTime;
-    var finishAlt;
-    var bestSoFar = 0;
-    var curLeg = -1;
-    var sectorLimits = getSectorLimits();
-    do {
-      if (!(flying)) {
-        distInterval = topoint(igcFile.latLong[i - 1], igcFile.latLong[i]);
-        groundspeed = 3600000 * distInterval.distance / (igcFile.recordTime[i].getTime() - igcFile.recordTime[i - 1].getTime());
-        if (groundspeed > 20) {
-          flying = true;
-          takeoffTime = igcFile.recordTime[i].getTime();
-          var takeOffDate = new Date(takeoffTime + timezone.offset);
-          $('#taskcalcs').text("Take off: " + takeOffDate.getUTCHours() + ':' + pad(takeOffDate.getUTCMinutes()));
-        }
-      }
-      if (curLeg < 2) { //not reached first TP
-        startstatus = topoint(task.coords[0], igcFile.latLong[i]); //check if in start zone
-        if ((checksector(startstatus.bearing, sectorLimits[0])) && (startstatus.distance < sectordefs.startrad)) {
-          curLeg = 0;
-          startIndexLatest = tpindices[0];
-        }
-        else {
-          if (curLeg === 0) {
-            curLeg = 1;
-            startIndexLatest=i;
-            distanceToNext = task.legsize[1];
-            timestamp = igcFile.recordTime[i].getTime();
-          }
-        }
-      }
-      if ((curLeg > 0) && (curLeg < task.coords.length)) {
-        nextstatus = topoint(task.coords[curLeg], igcFile.latLong[i]);
-        turned = false;
-        if (curLeg === task.coords.length - 1) {
-          if (nextstatus.distance < sectordefs.finrad) {
-            if (sectordefs.finishtype === "circle") {
-              turned = true;
-            }
-            else {
-              if (checksector(nextstatus.bearing, sectorLimits[curLeg])) {
-                turned = true;
-              }
-            }
-          }
-        } else {
-          if ((sectordefs.use_barrel) && (nextstatus.distance < sectordefs.tprad)) {
-            turned = true;
-          }
-          if (sectordefs.use_sector) {
-            if ((checksector(nextstatus.bearing, sectorLimits[curLeg])) && (nextstatus.distance < sectordefs.sector_rad)) {
-              turned = true;
-            }
-          }
-        }
-        if (turned) {
-          bestSoFar = distanceToNext;
-          bestIndex = i;
-          tpindices[curLeg] = i;
-          if (curLeg === 1) {
-            startIndexLatest = tpindices[0]; //last start before maximimum distance.  We stop checking for start after TP1
-          }
-          curLeg++;
-          distanceToNext += task.legsize[curLeg];
-        } else
-        {
-          currentDistance = distanceToNext - nextstatus.distance;
-          if (currentDistance > bestSoFar) {
-            bestSoFar = currentDistance;
-            tpindices[0]=startIndexLatest;
-            bestIndex = i;
-          }
-        }
-      }
-      i++;
+  function setEnl() {
+    enlStatus.detect = $("input[name='enldetect']:checked").val();
+    enlStatus.threshold = parseInt($('#enlthreshold').val());
+    enlStatus.duration = parseInt($('#enltime').val());
+    $('#enl').html("Engine (" + enlStatus.detect + ")");
+    if (barogramPlot) {
+      barogramPlot = plotBarogram();
     }
-    while ((i < igcFile.latLong.length) && (curLeg < task.coords.length));
-    i = igcFile.latLong.length;
-    do {
-      i--;
-      distInterval = topoint(igcFile.latLong[i - 1], igcFile.latLong[i]);
-      groundspeed = 3600000 * distInterval.distance / (igcFile.recordTime[i].getTime() - igcFile.recordTime[i - 1].getTime());
-    }
-    while ((groundspeed < 20) && (i > 0));
-    var landingTime = igcFile.recordTime[i].getTime();
-    var landingDate = new Date(landingTime + timezone.offset);
-    var pressureCheck = igcFile.pressureAltitude.reduce(function(a, b) {
-      return a + b;
-    }, 0); //total of pressure altitude records
-    if (pressureCheck === 0) {
-      alert("Pressure altitude not available.  Using GPS");
-    }
-    if ((curLeg === 0) && (bestSoFar > 0)) { //if landed in the start zone before TP 1 but have started
-      tpindices[0] = startIndexLatest; //take last point crossing line as a start
-      curLeg = 1; //and assume we are still on the first leg
-    }
-    for (j = 0; j < task.coords.length; j++) {
-      if (j < curLeg) {
-        if (pressureCheck > 0) { //if total of pressure altitude records > 0
-          tpAlt = igcFile.pressureAltitude[tpindices[j]];
-        } else {
-          tpAlt = igcFile.gpsAltitude[tpindices[j]];
-        }
-        timestamp = igcFile.recordTime[tpindices[j]].getTime();
-      }
-      switch (j) {
-        case 0:
-          legName = "<br/><br/>Start: ";
-          startTime = timestamp;
-          var startAlt = tpAlt;
-          break;
-        case task.coords.length - 1:
-          legName = "<br/>Finish: ";
-          finishTime = timestamp;
-          finishAlt = tpAlt;
-          break;
-        default:
-          legName = "<br/>TP" + j + ": ";
-      }
-      if (j < curLeg) {
-        $('#taskcalcs').append(legName + getPosInfo(timestamp, tpAlt));
+    if (igcFile) {
+      if (enlStatus.detect === 'On') {
+        engineRuns = getEngineState(igcFile, enlStatus);
+        mapControl.showEngineRuns(engineRuns.engineTrack);
       } else {
-        $('#taskcalcs').append(legName + "No Control");
+        mapControl.zapEngineRuns();
       }
     }
-    if (curLeg === task.coords.length) { //task completed
-      $('#taskcalcs').append("<br/><br/>" + task.distance.toFixed(2) + " Km task completed");
-      $('#taskcalcs').append("<br/>Elapsed time: " + toTimeString(finishTime - startTime, true));
-      $('#taskcalcs').append("<br/>Speed: " + (3600000 * task.distance / (finishTime - startTime)).toFixed(2) + " km/hr");
-      $('#taskcalcs').append("<br/>Height loss: " + (altitudeConversionFactor * (startAlt - finishAlt)).toFixed(0) + " " + $('#altitudeUnits').val());
-      if (altitudeConversionFactor !== 1) {
-        $('#taskcalcs').append(" (" + (startAlt - finishAlt).toFixed(0) + "m)");
+  }
+
+  function enlRealityCheck() {
+    var configerror = "";
+    if ($("input[name='enldetect']:checked").val() === 'On') {
+      var threshold = $('#enlthreshold').val();
+      var duration = $('#enltime').val();
+      if ((threshold < 1) || (threshold > 999)) {
+        configerror += "\nIllegal threshold value";
+      }
+      if ((duration < 2) || (duration > 100)) {
+        configerror += "\nUnrealistic time value";
       }
     }
-    else
-    {
-      if ((curLeg > 0) && (bestSoFar > 0)) {
-        var chickenDate = new Date(igcFile.recordTime[bestIndex].getTime() + timezone.offset);
-        $('#taskcalcs').append("<br/><br/>\"GPS Landing\" at: " + chickenDate.getUTCHours() + ":" + pad(chickenDate.getUTCMinutes()));
-        mapControl.pushPin(igcFile.latLong[bestIndex]);
-        $('#taskcalcs').append("<br/>Position: " + pointDescription(L.latLng(igcFile.latLong[bestIndex])));
-        $('#taskcalcs').append("<br/>Scoring distance: " + bestSoFar.toFixed(2) + " Km");
-      }
+    if (configerror.length > 0) {
+      alert(configerror);
+      return false;
+    } else {
+      return true;
     }
-    $('#taskcalcs').append("<br/><br/>Landing: " + landingDate.getUTCHours() + ':' + pad(landingDate.getUTCMinutes()));
-    $('#taskcalcs').append("<br/>Flight time: " + toTimeString(landingTime - takeoffTime, false));
-
   }
 
-  function getPosInfo(recordTime, altitude) {
-    var adjustedTime = new Date(recordTime + timezone.offset);
-    var showTime = adjustedTime.getUTCHours() + ':' + pad(adjustedTime.getUTCMinutes()) + ':' + pad(adjustedTime.getSeconds());
-    return showTime + ":  Altitude: " + (altitude * altitudeConversionFactor).toFixed(0) + " " + $('#altitudeUnits').val();
+  //end of enl configuration
+  //start of altitude reporting
+
+  function restoreAltRefs() {
+    $("input[name='alttype']").val([altRef]);
+    $("input[name='altsource']").val([altSource]);
   }
 
-  function toTimeString(interval, showsecs) {
-    var totalSeconds = interval / 1000;
-    var secondsPart = Math.round(totalSeconds % 60);
-    var totalMinutes = Math.floor(totalSeconds / 60);
-    var minutesPart = totalMinutes % 60;
-    var hoursPart = Math.floor(totalMinutes / 60);
-    var retval = hoursPart + "hrs " + minutesPart + "mins ";
-    if (showsecs) {
-      retval += secondsPart + "secs";
+  function setAltRefs() {
+    altRef = $("input[name='alttype']").filter(':checked').val();
+    altSource = $("input[name='altsource']").filter(':checked').val();
+    if (igcFile) {
+      altOffset = getAltOffset();
+      barogramPlot = plotBarogram();
+      var t = parseInt($('#timeSlider').val(), 10);
+      updateTimeline(t, mapControl);
     }
-    return retval;
   }
 
-  function showTask(mapControl) {
-    var i;
-    var pointlabel;
+  //end of setting user defined reporting options
+
+  function clearTask() {
     $('#taskbuttons').html("");
     $('#taskinfo').html("");
-    for (i = 0; i < task.labels.length; i++) {
-      $('#taskinfo').append('<tr><th>' + task.labels[i] + ':</th><td>' + task.names[i] + ':</td><td>' + task.descriptions[i] + '</td></tr>');
-      switch (i) {
-        case 0:
-          pointlabel = "Start";
-          break;
-        case task.labels.length - 1:
-          pointlabel = "Finish";
-          break;
-        default:
-          pointlabel = "TP" + i.toString();
-      }
-      $('#taskbuttons').append('&nbsp;<button>' + pointlabel + '</button>');
-      $('#tasklength').text("Task length: " + task.distance.toFixed(1) + " Km");
-      $('#task').show();
-    }
-    mapControl.addTask(task.coords, task.labels, sectordefs);
-    bindTaskButtons(mapControl);
-  }
-
-  function pointDescription(coords) {
-    var latdegrees = Math.abs(coords['lat']);
-    var latdegreepart = Math.floor(latdegrees);
-    var latminutepart = 60 * (latdegrees - latdegreepart);
-    var latdir = (coords['lat'] > 0) ? "N" : "S";
-    var lngdegrees = Math.abs(coords['lng']);
-    var lngdegreepart = Math.floor(lngdegrees);
-    var lngminutepart = 60 * (lngdegrees - lngdegreepart);
-    var lngdir = (coords['lng'] > 0) ? "E" : "W";
-
-    var retstr = latdegreepart.toString() + "&deg;" + latminutepart.toFixed(3) + "&prime;" + latdir + " " + lngdegreepart.toString() + "&deg;" + lngminutepart.toFixed(3) + "&prime;" + lngdir;
-    return retstr;
-  }
-
-  function clearTask(mapControl) {
-    $('#taskinfo').html("");
-    $('#tasklength').html("");
-    $('#taskbuttons').html("");
-    mapControl.zapTask();
-    $('#task').hide();
-    $('#taskdata').hide();
     task = null;
+    mapControl.clearTask();
   }
 
-  //Get display information associated with task
-  function maketask(points) {
-    var i;
-    var j = 1;
-    var distance = 0;
-    var leglength;
-    var names = [];
-    var labels = [];
-    var coords = [];
-    var descriptions = [];
-    var legsize = [];
-    names[0] = points.name[0];
-    labels[0] = "Start";
-    coords[0] = points.coords[0];
-    descriptions[0] = pointDescription(points.coords[0]);
-    legsize[0] = 0;
-    for (i = 1; i < points.coords.length; i++) {
-      leglength = points.coords[i].distanceTo(points.coords[i - 1]);
-      //eliminate situation when two successive points are identical (produces a divide by zero error on display. 
-      //To allow for FP rounding, within 30 metres is considered identical.
-      if (leglength > 30) {
-        names[j] = points.name[i];
-        coords[j] = points.coords[i];
-        descriptions[j] = pointDescription(points.coords[i]);
-        labels[j] = "TP" + j;
-        legsize[j] = leglength / 1000;
-        distance += leglength;
-        j++;
-      }
-    }
-    labels[labels.length - 1] = "Finish";
-    distance = distance / 1000;
-    var retval = {
-      names: names,
-      labels: labels,
-      coords: coords,
-      descriptions: descriptions,
-      legsize: legsize,
-      distance: distance
-    };
-    //Must be at least two points more than 30 metres apart
-    if (names.length > 1) {
-      return retval;
-    } else {
-      return null;
-    }
-  }
-
-  function getPoint(instr) {
-    var latitude;
-    var longitude;
-    var pointname = "Not named";
-    var matchref;
-    var statusmessage = "Fail";
-    var count;
-    var pointregex = [
-      /^([A-Za-z]{2}[A-Za-z0-9]{1})$/,
-      /^([A-Za-z0-9]{6})$/,
-      /^([\d]{2})([\d]{2})([\d]{3})([NnSs])([\d]{3})([\d]{2})([\d]{3})([EeWw])(.*)$/,
-      /^([0-9]{1,2}):([0-9]{1,2}):([0-9]{1,2})[\s]*([NnSs])[\W]*([0-9]{1,3}):([0-9]{1,2}):([0-9]{1,2})[\s]*([EeWw])$/,
-      /^(\d{1,2})[\s:](\d{1,2})\.(\d{1,3})\s*([NnSs])\s*(\d{1,3})[\s:](\d{1,2})\.(\d{1,3})\s*([EeWw])$/
-    ];
-    for (count = 0; count < pointregex.length; count++) {
-      matchref = instr.match(pointregex[count]);
-      if (matchref) {
-        switch (count) {
-          case 0:
-          case 1:
-            //BGA or Welt2000 point
-            $.ajax({
-              url: "findtp.php",
-              data: {
-                postdata: matchref[0]
-              },
-              timeout: 3000,
-              method: "POST",
-              dataType: "json",
-              async: false,
-              success: function(data) {
-                pointname = data.tpname;
-                if (pointname !== "Not found") {
-                  latitude = data.latitude;
-                  longitude = data.longitude;
-                  statusmessage = "OK";
-                }
-              }
-            });
-            break;
-          case 2:
-            //format in IGC file
-            latitude = parseFloat(matchref[1]) + parseFloat(matchref[2]) / 60 + parseFloat(matchref[3]) / 60000;
-            if (matchref[4].toUpperCase() === "S") {
-              latitude = -latitude;
-            }
-            longitude = parseFloat(matchref[5]) + parseFloat(matchref[6]) / 60 + parseFloat(matchref[7]) / 60000;
-            if (matchref[8].toUpperCase() === "W") {
-              longitude = -longitude;
-            }
-            if (matchref[9].length > 0) {
-              pointname = matchref[9];
-            }
-            statusmessage = "OK";
-
-            break;
-          case 3:
-            //hh:mm:ss
-            latitude = parseFloat(matchref[1]) + parseFloat(matchref[2]) / 60 + parseFloat(matchref[3]) / 3600;
-            if (matchref[4].toUpperCase() === "S") {
-              latitude = -latitude;
-            }
-            longitude = parseFloat(matchref[5]) + parseFloat(matchref[6]) / 60 + parseFloat(matchref[7]) / 3600;
-            if (matchref[8].toUpperCase() === "W") {
-              longitude = -longitude;
-            }
-            statusmessage = "OK";
-            break;
-          case 4:
-            latitude = parseFloat(matchref[1]) + parseFloat(matchref[2]) / 60 + parseFloat(matchref[3]) / (60 * (Math.pow(10, matchref[3].length)));
-            if (matchref[4].toUpperCase() === "S") {
-              latitude = -latitude;
-            }
-            longitude = parseFloat(matchref[5]) + parseFloat(matchref[6]) / 60 + parseFloat(matchref[7]) / (60 * (Math.pow(10, matchref[7].length)));
-            if (matchref[8].toUpperCase() === "W") {
-              longitude = -longitude;
-            }
-            statusmessage = "OK";
-            break;
-        }
-      }
-    }
-
-    return {
-      message: statusmessage,
-      coords: L.latLng(latitude, longitude),
-      name: pointname
-    };
-
-  }
-
-  function parseUserTask() {
-    var input;
-    var pointdata;
-    var success = true;
-    var taskdata = {
-      coords: [],
-      name: []
-    };
-    $("#requestdata :input[type=text]").each(function() {
-      input = $(this).val().replace(/ /g, '');
-      if (input.length > 0) {
-        pointdata = getPoint(input);
-        if (pointdata.message === "OK") {
-          taskdata.coords.push(pointdata.coords);
-          taskdata.name.push(pointdata.name);
-        } else {
-          success = false;
-          alert("\"" + $(this).val() + "\"" + " not recognised-" + " ignoring entry");
-        }
-      }
-    });
-    if (success) {
-      task = maketask(taskdata);
-    } else {
-      task = null;
-    }
-  }
-
-  function displaydate(timestamp) {
-    var daynames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    var monthnames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-    return daynames[timestamp.getUTCDay()] + " " + timestamp.getUTCDate() + " " + monthnames[timestamp.getUTCMonth()] + " " + timestamp.getUTCFullYear();
-  }
-
-  //get timezone data from timezonedb.  Via php to avoid cross-domain data request from the browser
-  //Timezone dependent processes run  on file load are here as request is asynchronous
-  //If the request fails or times out, silently reverts to default (UTC)
-  function gettimezone(igcFile, mapControl) {
-    var flightdate = igcFile.recordTime[0];
-    $.ajax({
-      url: "gettimezone.php",
-      data: {
-        stamp: flightdate / 1000,
-        lat: igcFile.latLong[0][0],
-        lon: igcFile.latLong[0][1]
-      },
-      timeout: 3000,
-      method: "POST",
-      dataType: "json",
-      success: function(data) {
-        if (data.status === "OK") {
-          timezone.zonename = data.zoneName;
-          timezone.zoneabbr = data.abbreviation;
-          timezone.offset = 1000 * parseFloat(data.gmtOffset);
-          if (data.dst === "1") {
-            timezone.zonename += ", daylight saving";
-          }
-        }
-      },
-      complete: function() {
-        //Local date may not be the same as UTC date
-        var localdate = new Date(flightdate.getTime() + timezone.offset);
-        $('#datecell').text(displaydate(localdate));
-        barogramPlot = plotBarogram(igcFile);
-        updateTimeline(0, mapControl);
-      }
-    });
-  }
-
-  function pad(n) {
-    return (n < 10) ? ("0" + n.toString()) : n.toString();
-  }
-
-  function plotBarogram() {
-    var nPoints = igcFile.recordTime.length;
-    var pressureBarogramData = [];
-    var gpsBarogramData = [];
-    var j;
-    var timestamp;
-    for (j = 0; j < nPoints; j++) {
-      timestamp = igcFile.recordTime[j].getTime() + timezone.offset;
-      pressureBarogramData.push([timestamp, igcFile.pressureAltitude[j] * altitudeConversionFactor]);
-      gpsBarogramData.push([timestamp, igcFile.gpsAltitude[j] * altitudeConversionFactor]);
-    }
-    var baro = $.plot($('#barogram'), [{
-      label: 'Pressure altitude',
-      data: pressureBarogramData
-    }, {
-      label: 'GPS altitude',
-      data: gpsBarogramData
-    }], {
-      axisLabels: {
-        show: true
-      },
-      xaxis: {
-        mode: 'time',
-        timeformat: '%H:%M',
-        axisLabel: 'Time (' + timezone.zonename + ')'
-      },
-      yaxis: {
-        axisLabel: 'Altitude / ' + $('#altitudeUnits').val()
-      },
-
-      crosshair: {
-        mode: 'xy'
-      },
-
-      grid: {
-        clickable: true,
-        autoHighlight: false
-      }
-    });
-    return baro;
-  }
-
-  function updateTimeline(timeIndex, mapControl) {
-    var currentPosition = igcFile.latLong[timeIndex];
-    var positionText = pointDescription(L.latLng(currentPosition));
-    var unitName = $('#altitudeUnits').val();
-    //add in offset from UTC then convert back to UTC to get correct time in timezone!
-    var adjustedTime = new Date(igcFile.recordTime[timeIndex].getTime() + timezone.offset);
-    $('#timePositionDisplay').html(adjustedTime.getUTCHours() + ':' + pad(adjustedTime.getUTCMinutes()) + ':' + pad(adjustedTime.getSeconds()) + " " + timezone.zoneabbr + '; ' +
-      (igcFile.pressureAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
-      unitName + ' (barometric) / ' +
-      (igcFile.gpsAltitude[timeIndex] * altitudeConversionFactor).toFixed(0) + ' ' +
-      unitName + ' (GPS); ' + positionText);
-    mapControl.setTimeMarker(timeIndex);
-
-    barogramPlot.lockCrosshair({
-      x: adjustedTime.getTime(),
-      y: igcFile.pressureAltitude[timeIndex] * altitudeConversionFactor
-    });
-  }
-
-  function bindTaskButtons(mapControl) {
-    $('#taskbuttons button').on('click', function(event) {
-      var li = $(this).index();
-      mapControl.showTP(task.coords[li]);
-    });
-  }
-
-  function getFileTask(igcFile) {
+  function getFileTask() {
     if (igcFile.taskpoints.length > 4) {
       var i;
       var pointdata;
@@ -719,278 +484,624 @@ var ns = (function($) {
       if (taskdata.name.length > 1) {
         return maketask(taskdata);
       }
-    }
-    else {
+    } else {
       return null;
     }
   }
 
-  function showImported(taskinfo) {
-    var tpoints = {
-      name: [],
-      coords: []
+  function getUserTask() {
+    var input;
+    var pointdata;
+    var success = true;
+    var taskdata = {
+      coords: [],
+      name: []
     };
-    var i;
-    $("#requestdata :input[type=text]").each(function() {
-      $(this).val("");
-    });
-    clearTask(mapControl);
-    for (i = 0; i < taskinfo.tpname.length; i++) {
-      tpoints.name.push(taskinfo.tpname[i]);
-      tpoints.coords.push(L.latLng(taskinfo.lat[i], taskinfo.lng[i]));
+    $("#requestdata :input[type=text]").each(function () {
+        input = $(this).val().replace(/ /g, '');
+        if (input.length > 0) {
+          pointdata = getPoint(input);
+          if (pointdata.message === "OK") {
+            taskdata.coords.push(pointdata.coords);
+            taskdata.name.push(pointdata.name);
+          } else {
+            success = false;
+            alert("\"" + $(this).val() + "\"" + " not recognised-" + " ignoring entry");
+          }
+        }
+      });
+    if (taskdata.name.length > 1) {
+      if (success) {
+        return maketask(taskdata);
+      } else {
+        return null;
+      }
     }
-    task = maketask(tpoints);
-    showTask(mapControl);
-    $('#clearTask').show();
   }
 
-  function displayIgc(mapControl) {
-    if ($("input[name=tasksource][value=infile]").prop('checked')) {
-      clearTask(mapControl);
-      task = getFileTask(igcFile);
+  function addSectors() {
+    var featurelist = {};
+    featurelist = getSectors(task, sectordefs);
+    mapControl.drawSectors(featurelist);
+  }
+
+  function showTaskLength(distance) {
+    var convDistance = distanceUnits.multiplier * distance;
+    $('#tasklength').text("Task distance: " + convDistance.toFixed(distanceUnits.precision) + " " + distanceUnits.descriptor);
+  }
+
+  function bindTaskButtons() {
+    $('#taskbuttons button').on('click', function (event) {
+        var li = $(this).index();
+        mapControl.showTP(task.coords[li]);
+      });
+  }
+
+  function showTask() {
+    var i;
+    var pointlabel;
+    $('#taskbuttons').html("");
+    $('#taskinfo').html("");
+    for (i = 0; i < task.labels.length; i++) {
+      $('#taskinfo').append('<tr><th>' + task.labels[i] + ':</th><td>' + task.names[i] + ':</td><td>' + task.descriptions[i] + '</td></tr>');
+      switch (i) {
+      case 0:
+        pointlabel = "Start";
+        break;
+      case task.labels.length - 1:
+        pointlabel = "Finish";
+        break;
+      default:
+        pointlabel = "TP" + i.toString();
+      }
+      $('#taskbuttons').append('&nbsp;<button>' + pointlabel + '</button>');
+    }
+    showTaskLength(task.distance);
+
+    $('#task').show();
+    $('#map').css('visibility', 'visible');
+    mapControl.addTask(task);
+    addSectors();
+    bindTaskButtons();
+  }
+
+  function getFromPlanner(version) {
+    var planUrl = "../TaskMap/xcplan.php?version=" + version;
+    if ((!(planWindow)) || (planWindow.closed)) {
+      planWindow = window.open(planUrl, "_blank");
+    }
+    planWindow.focus();
+  }
+
+  function gettimezone() {
+    var flightdate = igcFile.flightDate;
+    return $.ajax({
+      url: "gettimezone.php",
+      data: {
+        stamp: flightdate,
+        lat: igcFile.latLong[0].lat,
+        lon: igcFile.latLong[0].lng
+      },
+      timeout: 3000,
+      method: "POST",
+      dataType: "json"
+    });
+  }
+
+  function getElevation(index) {
+    return $.ajax({
+      url: "getelevation.php",
+      data: {
+        lat: igcFile.latLong[index].lat,
+        lon: igcFile.latLong[index].lng
+      },
+      timeout: 3000,
+      method: "POST",
+      dataType: "json"
+    });
+  }
+
+  function displayDate(timestamp) {
+    var daynames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    var monthnames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    var localdate = new Date(1000 * timestamp);
+    return daynames[localdate.getUTCDay()] + " " + localdate.getUTCDate() + " " + monthnames[localdate.getUTCMonth()] + " " + localdate.getUTCFullYear();
+  }
+
+  function getClimb(timeIndex) {
+    var climb;
+    var prevIndex = timeIndex - Math.ceil(30 / igcFile.timeInterval);
+    if (altSource === "baro") {
+      climb = (igcFile.pressureAltitude[timeIndex] - igcFile.pressureAltitude[prevIndex]) / (igcFile.recordTime[timeIndex] - igcFile.recordTime[prevIndex]);
+    } else {
+      climb = (igcFile.gpsAltitude[timeIndex] - igcFile.gpsAltitude[prevIndex]) / (igcFile.recordTime[timeIndex] - igcFile.recordTime[prevIndex]);
+    }
+    var climbstr = climb.toFixed(2);
+    if (climb > 0) {
+      climbstr = "+" + climbstr;
+    }
+    return climbstr;
+  }
+
+  function getDisplayTime(timestamp) {
+    var adjustedTime = (86400 + timestamp + timezone.offset) % 86400;
+    return pad(Math.floor(adjustedTime / 3600)) + ":" + pad(Math.floor((adjustedTime / 60) % 60)) + ":" + pad(adjustedTime % 60);
+  }
+
+  function updateTimeline(timeIndex) {
+    var positionText = pointDescription(igcFile.latLong[timeIndex]);
+    var displaySentence;
+    var altValue;
+    displaySentence = getDisplayTime(igcFile.recordTime[timeIndex]) + " " + timezone.zoneabbr + '; ' + altRef + " (" + altSource + ") ";
+    if (altSource === "baro") {
+      altValue = igcFile.pressureAltitude[timeIndex];
+    } else {
+      altValue = igcFile.gpsAltitude[timeIndex];
+    }
+    displaySentence += showval(altUnits, altValue + altOffset);
+    displaySentence += "; " + positionText;
+    if (igcFile.timeInterval * timeIndex > 30) {
+      var climb = getClimb(timeIndex);
+      displaySentence += ";  vario: " + showval(climbUnits, climb);
+    }
+    $('#timePositionDisplay').html(displaySentence);
+    mapControl.setTimeMarker(igcFile.latLong[timeIndex]);
+    var xval = 1000 * (igcFile.recordTime[timeIndex] + timezone.offset);
+    var yval = (altValue + altOffset) * altUnits.multiplier;
+    barogramPlot.lockCrosshair({
+      x: xval,
+      y: yval
+    });
+  }
+
+  function showPositionDetail(timeIndex) {
+    $.when(getElevation(timeIndex))
+      .done(function (data, status) {
+        if (status === 'success') {
+          var groundElevation = data.results[0].elevation;
+          var gliderAlt;
+          if (igcFile.hasPressure) {
+            gliderAlt = igcFile.pressureAltitude[timeIndex] - igcFile.pressureAltitude[0] + startElevation;
+          } else {
+            gliderAlt = igcFile.gpsAltitude[timeIndex] - igcFile.gpsAltitude[igcFile.takeOffGps] + startElevation;
+          }
+          $('#heightAGL').text("Height above ground: " + showval(altUnits, gliderAlt - groundElevation));
+        }
+      });
+    var startPos = timeIndex - Math.ceil(30 / igcFile.timeInterval); //30 second spread of data
+    //get average turn rate over ~last 30 secs
+    var cuSum = 0;
+    var i;
+    var j;
+    for (i = startPos; i <= timeIndex; i++) {
+      cuSum += turnRate[i];
+    }
+    var avgeTurn = Math.abs(cuSum / (i - startPos));
+    if (avgeTurn > 4) {
+      $('#flightMode').text("Flight mode: Circling");
+      var circling = true;
+      var thermalDetail = "Data for this thermal:<br>Height gain: ";
+      //assume if we are turning at less than 4 deg./sec for 15 seconds we are flying straight
+      var pointsToCheck = Math.ceil(15 / igcFile.timeInterval);
+      i = timeIndex;
+      do {
+        i--;
+        if (Math.abs(turnRate[i]) < 5) {
+          circling = false;
+          for (j = 1; j <= pointsToCheck; j++) {
+            if (Math.abs(turnRate[i - j]) > 4) {
+              circling = true;
+            }
+          }
+        }
+      }
+      while (circling);
+      var thermalStartIndex = i;
+      i = timeIndex;
+      circling = true;
+      do {
+        i++;
+        if (Math.abs(turnRate[i]) < 5) {
+          circling = false;
+          for (j = 1; j <= pointsToCheck; j++) {
+            if (Math.abs(turnRate[i + j]) > 4) {
+              circling = true;
+            }
+          }
+        }
+      }
+      while (circling);
+      var thermalTopIndex = i;
+      var heightGain;
+      var climbTime = igcFile.recordTime[thermalTopIndex] - igcFile.recordTime[thermalStartIndex];
+      if (altSource === "baro") {
+        heightGain = igcFile.pressureAltitude[thermalTopIndex] - igcFile.pressureAltitude[thermalStartIndex];
+      } else {
+        heightGain = igcFile.gpsAltitude[thermalTopIndex] - igcFile.gpsAltitude[thermalStartIndex];
+      }
+      thermalDetail += showval(altUnits, heightGain);
+      thermalDetail += "<br>Time taken: " + Math.floor((climbTime / 60) % 60) + "mins " + pad(climbTime % 60) + "secs<br><br>Average climb: ";
+      var thermalAvge = heightGain / climbTime;
+      thermalDetail += showval(climbUnits, thermalAvge);
+      $('#flightdetail1').html(thermalDetail);
     }
 
-    if (task !== null) {
-      showTask(mapControl);
+    if (avgeTurn < 2) {
+      $('#flightMode').text("Flight mode: Cruising");
+      if (startPos > 0) {
+        var cruiseInfo = topoint(igcFile.latLong[startPos], igcFile.latLong[timeIndex]);
+        var cruiseSpeed = 3600 * cruiseInfo.distance / (igcFile.recordTime[timeIndex] - igcFile.recordTime[startPos]);
+        $('#flightdetail1').text("Ground speed: " + showval(cruiseUnits, cruiseSpeed));
+      }
     }
+  }
+
+  function loadAirspace(margin) {
+    $.post("getairspace.php", {
+        bounds: JSON.stringify(igcFile.bounds),
+        margin: margin
+      },
+      function (data, status) {
+        if (status === 'success') {
+          mapControl.setAirspace(data);
+          mapControl.updateAirspace(Number($("#airclip").val()));
+        } else {
+          alert("Airspace load failed");
+        }
+      }, "json");
+  }
+
+  function reportFlight() {
+    $('#sectordefs').hide();
+    $('taskcalcs').text('');
+    $('#taskdata').show();
+    $('#taskcalcs').html("Take off:  " + getDisplayTime(igcFile.recordTime[igcFile.takeOffIndex]) + "<br>");
+    if (task) {
+      var i;
+      var altValue = [];
+      var elapsedTime;
+      var taskData = assessTask(igcFile, task, enlStatus, sectordefs, engineRuns);
+      for (i = 0; i < task.coords.length; i++) {
+        $('#taskcalcs').append("<br/>" + task.labels[i] + ": ");
+        if (i < taskData.npoints) {
+          $('#taskcalcs').append(getDisplayTime(igcFile.recordTime[taskData.turnIndices[i]]) + ": Altitude: ");
+          if (altSource === "baro") {
+            altValue[i] = igcFile.pressureAltitude[taskData.turnIndices[i]];
+          } else {
+            altValue[i] = igcFile.gpsAltitude[taskData.turnIndices[i]];
+          }
+          $('#taskcalcs').append(showval(altUnits, altValue[i] + altOffset));
+        } else {
+          $('#taskcalcs').append("No control");
+        }
+      }
+
+      if (taskData.npoints === task.coords.length) { //task completed
+        $('#taskcalcs').append("<br/><br/>" + task.distance.toFixed(distanceUnits.precision) + " " + distanceUnits.descriptor + "  task completed");
+        elapsedTime = igcFile.recordTime[taskData.turnIndices[taskData.npoints - 1]] - igcFile.recordTime[taskData.turnIndices[0]];
+        $('#taskcalcs').append("<br/>Elapsed time: " + Math.floor(elapsedTime / 3600) + "hrs " + pad(Math.floor((elapsedTime / 60) % 60)) + "mins " + pad(elapsedTime % 60) + "secs");
+        $('#taskcalcs').append("<br/>Speed: " + showval(speedUnits, 3600 * task.distance / elapsedTime));
+        $('#taskcalcs').append("<br/>Height loss: " + showval(altUnits, altValue[0] - altValue[task.coords.length - 1]));
+        if (altUnits.abbr !== 'mt') {
+          $('#taskcalcs').append(" (" + (altValue[0] - altValue[task.coords.length - 1]) + "m)");
+        }
+      } else {
+        if (taskData.npoints > 0) {
+          $('#taskcalcs').append("<br/><br/>\"GPS Landing\" at: " + getDisplayTime(igcFile.recordTime[taskData.bestPoint]));
+          $('#taskcalcs').append("<br/>Position: " + pointDescription(igcFile.latLong[taskData.bestPoint]));
+          $('#taskcalcs').append("<br/>Scoring distance: " + showval(distanceUnits, taskData.scoreDistance));
+          mapControl.pushPin(igcFile.latLong[taskData.bestPoint]);
+        }
+      }
+    }
+    $('#taskcalcs').append("<br/><br/>Landing: " + getDisplayTime(igcFile.recordTime[igcFile.landingIndex]));
+    var flightSeconds = igcFile.recordTime[igcFile.landingIndex] - igcFile.recordTime[igcFile.takeOffIndex];
+    $('#taskcalcs').append("<br/><br/>Flight time: " + Math.floor(flightSeconds / 3600) + "hrs " + pad(Math.round(flightSeconds / 60) % 60) + "mins");
+  }
+
+  function displayIgc() {
+    if ((altSource === "baro") && !(igcFile.hasPressure)) {
+      alert("Pressure altitude not available.\nUsing GPS");
+      altSource = "gps";
+    }
+    //Call this first as process is asynchronous- can run while the map is being drawn
+    $.when(gettimezone(), getElevation(0)).done(function (tzargs, elargs) {
+        if (tzargs[0].status === 'OK') {
+          timezone.zoneabbr = tzargs[0].timeZoneName.match(/[A-Z]/g).join('');
+          timezone.offset = parseFloat(tzargs[0].rawOffset) + parseFloat(tzargs[0].dstOffset);
+          timezone.zonename = tzargs[0].timeZoneName;
+        } else {
+          timezone.zoneabbr = "UTC";
+          timezone.offset = 0;
+          timezone.zonename = "UTC";
+        }
+        if (elargs[0].status === 'OK') {
+          startElevation = elargs[0].results[0].elevation;
+        } else {
+          startElevation = null;
+        }
+        altOffset = getAltOffset();
+        var localtime = igcFile.flightDate + timezone.offset;
+        $('#datecell').text(displayDate(localtime));
+        barogramPlot = plotBarogram(igcFile);
+        updateTimeline(0);
+      });
     // Display the headers.
     var headerBlock = $('#headers');
     headerBlock.html('');
-    //Delay display of date till we get the timezone
     var headerIndex;
     for (headerIndex = 0; headerIndex < igcFile.headers.length; headerIndex++) {
       headerBlock.append(
-        $('<tr></tr>').append($('<th></th>').text(igcFile.headers[headerIndex].name))
-        .append($('<td></td>').text(igcFile.headers[headerIndex].value))
+        $('<tr></tr>').append($('<th></th>').text(igcFile.headers[headerIndex].name)).append($('<td></td>').text(igcFile.headers[headerIndex].value))
       );
     }
     $('#flightInfo').show();
-    // Reveal the map and graph. We have to do this before
-    // setting the zoom level of the map or plotting the graph.
-    $('#igcFileDisplay').show();
     mapControl.addTrack(igcFile.latLong);
-    loadAirspace();
-    //Barogram is now plotted on "complete" event of timezone query
-    gettimezone(igcFile, mapControl);
-    // Set airspace clip altitude to selected value and show airspace for the current window
-    //mapControl.updateAirspace(Number($("#airclip").val()));
-    //Enable automatic update of the airspace layer as map moves or zooms
-    //mapControl.activateEvents();
+    $('#flightinfo').show();
     $('#timeSlider').prop('max', igcFile.recordTime.length - 1);
-  }
-
-  function storePreference(name, value) {
-    if (window.localStorage) {
-      try {
-        localStorage.setItem(name, value);
-      } catch (e) {
-        // If permission is denied, ignore the error.
+    if ((igcFile.taskpoints.length > 4) && ($('input[type=radio][name=tasksource]').filter(':checked').val() === "infile")) {
+      $('#task').hide();
+      clearTask();
+      task = getFileTask();
+      if (task) {
+        showTask();
       }
     }
+    mapControl.setBounds(igcFile.bounds);
+    if (enlStatus.detect === 'On') {
+      engineRuns = getEngineState(igcFile, enlStatus);
+      //alert(JSON.stringify(engineRuns.engineTrack));
+      mapControl.showEngineRuns(engineRuns.engineTrack);
+    }
+    loadAirspace(20); //Show airspace in track bounding rectangle + 20 Km margin
+    turnRate = getTurnRate(igcFile);
   }
 
-  $(document).ready(function() {
-    mapControl = createMapControl('map');
-    mapControl.setClipAlt($('#airclip').val());
-    var planWindow = null;
-    var altitudeUnit = $('#altitudeUnits').val();
-    if (altitudeUnit === 'feet') {
-      altitudeConversionFactor = 3.2808399;
-    } else {
-      altitudeConversionFactor = 1.0;
-    }
-    window.name = "igcview";
-    setSectorDefaults();
-    $("input[name=tasksource][value=infile]").prop('checked', true);
-    $('#fileControl').change(function() {
-      if (this.files.length > 0) {
-        var reader = new FileReader();
-        reader.onload = function(e) {
-          try {
-            $('#errorMessage').text('');
-            mapControl.reset();
-            $('#timeSlider').val(0);
-            igcFile = parseIGC(this.result);
-            displayIgc(mapControl);
-          } catch (ex) {
-            if (ex instanceof IGCException) {
-              $('#errorMessage').text(ex.message);
-            } else {
-              throw ex;
+  $(document).ready(function () {
+      mapControl = createMapControl();
+      applyUnits();
+      setSectorDefaults();
+      setEnlDefaults();
+      getStoredValues();
+      showSectors();
+      showEnlStatus();
+      setEnl();
+      setAltRefs();
+      window.name = "igcview";
+      
+      $('#help').click(function () {
+          window.open("igchelp.html", "_blank");
+        });
+      
+       $('#about').click(function () {
+          window.open("igcabout.html", "_blank");
+        });
+      
+      $('#fileControl').change(function () {
+          if (this.files.length > 0) {
+            var reader = new FileReader();
+            reader.onload = function (e) {
+              try {
+                // mapControl.reset();
+                $('#timeSlider').val(0);
+                igcFile = parseIGC(this.result);
+                displayIgc();
+              } catch (ex) {
+                if (ex instanceof IGCException) {
+                  alert(ex.message);
+                } else {
+                  throw ex;
+                }
+              }
+            };
+            reader.readAsText(this.files[0]);
+          }
+        });
+
+      //user configuration section
+      //unit configuration panel
+      $('#unitconfig').click(function () {
+          $('#setunits').show();
+        });
+
+      $('#applyunits').click(function () {
+          applyUnits();
+          $(this).parent().hide();
+        });
+
+      $('#cancelunits').click(function () {
+          restoreUnits();
+          $(this).parent().hide();
+        });
+
+      //end of unit configuration
+      //start of tp configuration section
+
+      $('#sectorconfig')
+        .click(function () {
+          $('#sectordefs')
+            .show();
+        });
+
+      $('#tpdefaults').click(function () {
+          setSectorDefaults();
+          showSectors();
+        });
+
+      $('#setsectors').click(function () {
+          if (sectorsRealityCheck()) {
+            $('#sectordefs').hide();
+            setSectors();
+            if ($('#savesectors').prop("checked")) {
+              storePreference("sectors", JSON.stringify(sectordefs));
             }
           }
-        };
-        reader.readAsText(this.files[0]);
-      }
-    });
+        });
 
-    $('#help').click(function() {
-      window.open("igchelp.html", "_blank");
-    });
+      $('#cancelsectors').click(function () {
+          $(this).parent().hide();
+        });
 
-    $('#about').click(function() {
-      window.open("igcabout.html", "_blank");
-    });
+      //end of tp configuration panel
+      //start of enl configuration panel
 
-    $('#altitudeUnits').change(function(e, raisedProgrammatically) {
-      var altitudeUnit = $(this).val();
-      if (altitudeUnit === 'feet') {
-        altitudeConversionFactor = 3.2808399;
-      } else {
-        altitudeConversionFactor = 1.0;
-      }
-      if (igcFile !== null) {
-        barogramPlot = plotBarogram();
-        updateTimeline($('#timeSlider').val(), mapControl);
-      }
+      $('#enl').click(function () {
+          $('#setenl').show();
+        });
 
-      if (!raisedProgrammatically) {
-        storePreference("altitudeUnit", altitudeUnit);
-      }
-    });
+      $('#enlhelp').click(function () {
+          window.open("igchelp.html#enl", "_blank");
+        });
 
-    // We need to handle the 'change' event for IE, but
-    // 'input' for Chrome and Firefox in order to update smoothly
-    // as the range input is dragged.
-    $('#timeSlider').on('input', function() {
-      var t = parseInt($(this).val(), 10);
-      updateTimeline(t, mapControl);
-    });
-    $('#timeSlider').on('change', function() {
-      var t = parseInt($(this).val(), 10);
-      updateTimeline(t, mapControl);
-    });
+      $('#enldefaults').click(function () {
+          setEnlDefaults();
+          showEnlStatus();
+        });
 
-    $('#airclip').change(function() {
-      var clipping = $(this).val();
-      if (igcFile !== null) {
-        mapControl.updateAirspace(Number(clipping));
-      }
-      storePreference("airspaceClip", clipping);
-    });
+      $('#cancelenl').click(function () {
+          $(this).parent().hide();
+        });
 
-    $('#clearTask').click(function() {
-      $("#requestdata :input[type=text]").each(function() {
-        $(this).val("");
-      });
-    });
-
-    $('#zoomtrack').click(function() {
-      mapControl.zoomToTrack();
-    });
-
-    $('button.toggle').click(
-      function() {
-        $(this).next().toggle();
-        if ($(this).next().is(':visible')) {
-          $(this).text('Hide');
-        } else {
-          $(this).text('Show');
-        }
-      });
-
-    $('#enterTask').click(function() {
-      clearTask(mapControl);
-      parseUserTask();
-      showTask(mapControl);
-      $('#taskentry').hide();
-      $('#task').show();
-    });
-
-    $('#barogram').on('plotclick', function(event, pos, item) {
-      if (item) {
-        updateTimeline(item.dataIndex, mapControl);
-        $('#timeSlider').val(item.dataIndex);
-      }
-    });
-
-    $('#analyse').click(function() {
-      $('#sectors').hide();
-      $('taskcalcs').text('');
-      $('#taskdata').show();
-      analyseTask(mapControl);
-    });
-
-    $('#configure').click(function() {
-      $('#taskdata').hide();
-      $('#sectors').show();
-    });
-
-    $('.closewindow').click(function() {
-      $(this).parent().hide();
-    });
-
-    $('#setsectors').click(function() {
-      if (realityCheck()) {
-        $('#sectors').hide();
-        setSectors();
-        if (task !== null) {
-          mapControl.zapTask();
-          mapControl.addTask(task.coords, task.labels, sectordefs);
-        }
-        if ($('#savesectors').prop("checked")) {
-          storePreference("sectors", JSON.stringify(sectordefs));
-        }
-      }
-    });
-
-    $('#tpdefaults').click(function() {
-      setSectorDefaults();
-      showSectors();
-    });
-
-    $('input[type=radio][name=tasksource]').change(function() {
-      switch (this.value) {
-        case "infile":
-          $('#taskentry').hide();
-          clearTask(mapControl);
-          task = getFileTask(igcFile);
-          showTask(mapControl);
-          $('#task').show();
-          break;
-        case "user":
-          $('#task').hide();
-          $('#taskentry').show();
-          break;
-        case "xcplan":
-          if ((!(planWindow)) || (planWindow.closed)) {
-            planWindow = window.open("../TaskMap/xcplan.php?version=world", "_blank");
+      $('#applyenl').click(function () {
+          if (enlRealityCheck()) {
+            $('#setenl').hide();
+            setEnl();
+            if ($('#saveenl').prop("checked")) {
+              storePreference("enl", JSON.stringify(enlStatus));
+            }
           }
-          planWindow.focus();
-          break;
-        case "nix":
-          clearTask(mapControl);
-          task = null;
-      }
-    });
+        });
 
-    var storedAltitudeUnit = '',
-      airspaceClip = '';
-    var storedSectorDefs;
-    if (window.localStorage) {
-      try {
-        storedAltitudeUnit = localStorage.getItem("altitudeUnit");
-        if (storedAltitudeUnit) {
-          $('#altitudeUnits').val(storedAltitudeUnit).trigger('change', true);
-        }
-        storedSectorDefs = localStorage.getItem("sectors");
-        if (storedSectorDefs) {
-          sectordefs = JSON.parse(storedSectorDefs);
-        }
-        airspaceClip = localStorage.getItem("airspaceClip");
-        if (airspaceClip) {
-          $('#airclip').val(airspaceClip);
-        }
-      } catch (e) {
-        // If permission is denied, ignore the error.
-      }
-    }
-    showSectors();
-  });
+      //end of enl configuration panel
+      //start of altitude configuration panel
+
+      $('#altref').click(function () {
+          $('#setaltref').show();
+        });
+
+      $('#althelp').click(function () {
+          window.open("igchelp.html#alt", "_blank");
+        });
+
+      $('#restorealtref').click(function () {
+          restoreAltRefs();
+          $(this).parent().hide();
+        });
+
+      $('#applyaltref').click(function () {
+          setAltRefs();
+          storePreference("altRef", altRef);
+          storePreference("altSource", altSource);
+          $(this).parent().hide();
+        });
+
+      //end of altitude reference section
+
+      $('#airclip').change(function () {
+          var clipping = $(this).val();
+          if (igcFile) {
+            mapControl.updateAirspace(Number(clipping));
+          }
+          storePreference("airspaceClip", clipping);
+        });
+
+      $('#enterTask').click(function () {
+          task = getUserTask();
+          $('#taskentry').hide();
+          showTask();
+        });
+
+      $('#clearTask').click(function () {
+          $("#requestdata :input[type=text]").each(function () {
+              $(this).val("");
+            });
+        });
+
+      // We need to handle the 'change' event for IE, but
+      // 'input' for Chrome and Firefox in order to update smoothly
+      // as the range input is dragged.
+      $('#timeSlider').on('input', function () {
+          $('#positionDetail').hide();
+          var t = parseInt($(this).val(), 10);
+          updateTimeline(t);
+        });
+
+      $('#timeSlider').on('change', function () {
+          $('#positionDetail').hide();
+          var t = parseInt($(this).val(), 10);
+          updateTimeline(t);
+        });
+
+      $('#barogram').on('plotclick', function (event, pos, item) {
+          if (item) {
+            updateTimeline(item.dataIndex);
+            showPositionDetail(item.dataIndex);
+            $('#timeSlider').val(item.dataIndex);
+          }
+        });
+
+      $('button.toggle').click(
+          function () {
+            $(this).next().toggle();
+            if ($(this).next().is(':visible')) {
+              $(this).text('Hide');
+            } else {
+              $(this).text('Show');
+            }
+          });
+
+      $('#zoomtrack').click(function () {
+          mapControl.setBounds(igcFile.bounds);
+        });
+
+      $('#analyse').click(function () {
+          if (igcFile) {
+            reportFlight();
+          }
+        });
+
+      $('.closewindow').click(function () {
+          $(this).parent().hide();
+        });
+
+      $('#moreData').click(function () {
+          $('#positionDetail').show();
+          var t = parseInt($('#timeSlider').val(), 10);
+          showPositionDetail(t);
+        });
+
+      $('input[type=radio][name=tasksource]').change(function () {
+          $('#taskentry').hide();
+          $('#task').hide();
+          clearTask();
+          switch (this.value) {
+          case "infile":
+            if (igcFile) {
+              task = getFileTask();
+              if (task) {
+                showTask();
+              } else {
+                alert("No declaration found");
+              }
+            }
+            break;
+          case "user":
+            $('#taskentry').show();
+            break;
+          case "xcplan":
+            getFromPlanner(this.id);
+            break;
+          case "nix":
+            clearTask();
+            break;
+          }
+        });
+    });
   return {
-    importTask: function(taskinfo) {
-      showImported(taskinfo);
+    importTask: function (taskinfo) {
+      task = maketask(taskinfo);
+      showTask();
       return "Task entered successfully";
     }
-  }
+  };
 }(jQuery));

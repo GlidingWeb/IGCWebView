@@ -5,22 +5,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="initial-scale=1, width=device-width">
     <title>IGC Viewer</title>
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.4.0/css/font-awesome.min.css">
-    <link rel="stylesheet" href="lib/leaflet/leaflet.css" />
-    <link rel="stylesheet" href="lib/leaflet-awesome-markers/leaflet.awesome-markers.css" />
     <link rel="stylesheet" href="igcviewer.css" />
 
+    <script  src="https://maps.googleapis.com/maps/api/js"></script>
     <script src="lib/jquery-2.1.3.min.js"></script>
     <script src="lib/jquery.flot.min.js"></script>
     <script src="lib/jquery.flot.axislabels.js"></script>
     <script src="lib/jquery.flot.resize.min.js"></script>
     <script src="lib/jquery.flot.crosshair.js"></script>
     <script src="lib/jquery.flot.time.min.js"></script>
-    <script src="lib/leaflet/leaflet.js"></script>
-    <script src="lib/leaflet/Semicircle.js"></script>
-    <script src="lib/leaflet-awesome-markers/leaflet.awesome-markers.min.js"></script>
     <script src="parseigc.js"></script>
     <script src="mapcontrol.js"></script>
+    <script src="taskcalc.js"></script>
     <script src="igcviewer.js"></script>
 </head>
 
@@ -33,9 +29,9 @@
         <p>
             A free browser-based tool for viewing IGC format tracks and barograph traces from gliding loggers.
         </p>
-        <p> &copy; 2015 Alistair Malcolm Green and Richard Brisbourne </p>
+        <p> &copy; 2016 Alistair Malcolm Green and Richard Brisbourne </p>
         <p>
-                <b>Warning:</b> Airspace data is not valid for flight planning or navigation
+                <b>Warning:</b> Airspace data is not valid for flight planning or navigation.
         </p>
         <p>
             Always consult the official publications for current and correct information.    
@@ -60,14 +56,12 @@
         <button class='toggle'>Hide</button>
         <div class='hideable'>
             <p>
-                <label for="altitudeUnits">Altitude units:</label>
-                <select id="altitudeUnits" class="inbutton">
-                    <option value="feet">Feet</option>
-                    <option value="metres">Metres</option>
-                </select>
-                &nbsp;&nbsp;
-                <span class="nowrap">
-        <label for="airclip">Clip airspace above:</label>
+        <button id="unitconfig">Units</button>
+         &nbsp;<button id="sectorconfig">Sectors</button>
+         &nbsp;<button id="enl">Engine</button>
+        &nbsp;<button id="altref">Altitude ref.</button>
+         <span class="nowrap">
+        <label for="airclip"> &nbsp;Hide airspace over:</label>
         <select id="airclip" class="inbutton">
            <option value="0">No Airspace</option>
            <option value="3001">3000 feet</option>
@@ -78,17 +72,16 @@
             <option value="19501">19500 feet</option>
         </select>
         </span>
-         &nbsp;&nbsp;
-         <button id="configure">Configure TP sectors</button>
             </p>
         </div>
     </div>
         <h2>Select Task Source</h2>
         <button class='toggle'>Hide</button>
         <div>
-        <p><span class='nowrap'><label for='infile'>IGC File</label><input type='radio' name='tasksource'  value='infile' id='inflie'/></span>
+        <p><span class='nowrap'><label for='infile'>IGC File</label><input type='radio' name='tasksource'  value='infile' id='infile' checked/></span>
         <span class='nowrap'><label for='user'>User entry</label><input type='radio' name='tasksource'  value='user' id='user'/></span>
-        <span class='nowrap'><label for='xcplan'>XCWebPlan</label><input type='radio' name='tasksource'  value='xcplan' id='xcplan'/></span>
+        <span class='nowrap'><label for='xcplan'>XCWebPlan (world)</label><input type='radio' name='tasksource'  value='xcplan' id='world'/></span>
+         <span class='nowrap'><label for='xcplan'>XCWebPlan (UK)</label><input type='radio' name='tasksource'  value='xcplan' id='uk'/></span>
         <span class='nowrap'><label for='nix'>None</label><input type='radio' name='tasksource'  value='nix' id='nix'/> </span></p>
         <div id='taskentry'>
             <p>You may enter <a href="http://www.spsys.demon.co.uk/turningpoints.htm" target="_blank">BGA trigraphs</a>, six
@@ -138,16 +131,20 @@
     </div>
     <br>
     <div id="igcFileDisplay">
-
         <div id="mapWrapper" class="halfwidth">
             <div id="map"></div>
+            <div id="flightinfo">
             <div id="slider">
                 <label for="timeSlider">Time:</label>
                 <input type="range" id="timeSlider" step="1" value="0" min="0" max="100" />
+              </div>
+              <div>
+                <button class="floatright" id="moreData">More...</button>
                 <p id="timePositionDisplay"></p>
-            </div>
+           </div>
             <p>Zoom:
                 <button id="zoomtrack">Track</button>&nbsp;&nbsp;<span id="taskbuttons"></span><button id="analyse">&nbsp;&nbsp; Analyse task</button></p>
+        </div>
         </div>
         <div id="barogram" class="halfwidth"></div>
     </div>
@@ -159,7 +156,47 @@
     <p id="flighttime"></p>
     <button class="closewindow">Close</button>
     </div>
-    <div id="sectors">
+    
+            <div id='setunits'>
+         <p><b>Select units:</b> </p>
+         <p>Altitude: 
+           <select id="altitudeunits" class="inbutton">
+           <option value="ft" selected>Feet</option>
+           <option value="mt">Metres</option>
+     </select>
+     </p>
+     <p>
+      <p>Climb rate: 
+           <select id="climbunits" class="inbutton">
+           <option value="kt" selected>Knots</option>
+           <option value="mps">Metres/second</option>
+            <option value="fpm">Ft/min</option>
+     </select>
+     </p>
+     <p>Cruise Speed: 
+           <select id="cruiseunits" class="inbutton">
+           <option value="kt" selected>Knots</option>
+           <option value="kph">Km/hour</option>
+            <option value="mph">Miles/hr</option>
+     </select>
+     </p>
+     <p>Task Speed: 
+           <select id="taskunits" class="inbutton">
+           <option value="kph" selected>Km/hour</option>
+            <option value="mph">Miles/hr</option>
+     </select>
+     </p>
+     <p>Task Distance: 
+           <select id="lengthunits" class="inbutton">
+           <option value="km" selected>Kilometres</option>
+            <option value="miles">Miles</option>
+     </select>
+     </p>
+         <button id="cancelunits">Cancel</button>
+         <button id="applyunits" class="floatright">Apply</button>
+      </div>
+      
+    <div id="sectordefs">
     <h3>Control Sectors</h3>
     <p>
     <b>Start Line:</b><br/>Radius: <input id="startrad" type="text" value="5.0"/>Km
@@ -179,8 +216,39 @@
     </p>
     <button id="tpdefaults">Restore defaults</button>
     <p>Save configuration:  <input id="savesectors" type="checkbox"></p>
-    <button class="closewindow">Cancel</button>
-      <button id="setsectors">Apply</button>
+    <button id="cancelsectors">Cancel</button>
+      <button id="setsectors" class="floatright">Apply</button>
+      </div>
+      <div id='setenl'>
+         <p><b>ENL engine detect:</b> <input type="radio" name="enldetect" value="Off" checked>Off&nbsp;  <input type="radio" name="enldetect" value="On">On
+         <p>Threshold: <input type='text' id="enlthreshold"  /> (1-1000)</p>
+         <p>Time required: <input type='text' id="enltime"  /> seconds</p>
+         <button id="enlhelp">Help</button>  
+         <button id="enldefaults" class="floatright">Restore defaults</button>
+      <p>Save configuration:  <input id="saveenl" type="checkbox" checked=false></p>
+         <button id="cancelenl">Cancel</button>
+         <button id="applyenl" class="floatright">Apply</button>
+      </div>
+  
+      <div id='setaltref'>
+         <h3>Altitude reference</h3>
+         <p>*Standard (STD) <input type='radio' name='alttype'  value='std'/><br />
+          QFE take off <input type='radio'  name='alttype'   value='QFE'  checked='checked' /><br />
+          QNH, ref sea level <input type='radio' name='alttype'  value='QNH' /></p>
+        <p>*With pressure source, reference 1013.25 mb.  With GPS, raw file data</p>
+        <br />
+        <h3>Data Source</h3>
+        <p>Pressure <input type='radio'  name='altsource'   value='baro'  checked='checked' /> &nbsp;
+        GPS <input type='radio' name='altsource'  value='gps' /></p>
+         <p><button  id="althelp">Help</button></p>
+         <button id="restorealtref">Cancel</button>
+         <button id="applyaltref" class="floatright">Apply</button>
+      </div>
+       <div id='positionDetail'>
+       <p id="heightAGL"></p>
+        <p id="flightMode"></p>
+        <p id="flightdetail1"></p>
+           <button class="closewindow">Close</button>
       </div>
 </body>
 
