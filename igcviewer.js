@@ -847,6 +847,7 @@ var ns = (function ($) {
         showTask();
       }
     }
+    $('#map').show();
     mapControl.setBounds(igcFile.bounds);
     if (enlStatus.detect === 'On') {
       engineRuns = getEngineState(igcFile, enlStatus);
