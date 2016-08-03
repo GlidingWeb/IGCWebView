@@ -35,6 +35,12 @@
         </p>
         <p> &copy; 2015 Alistair Malcolm Green and Richard Brisbourne </p>
         <p>
+                <b>Warning:</b> Airspace data is not valid for flight planning or navigation
+        </p>
+        <p>
+            Always consult the official publications for current and correct information.    
+        </p>
+        <p>
             <label for="fileControl"><b>Select a file to view:</b></label>
             <input id="fileControl" type="file" accept=".igc" class="inbutton" />
         </p>
@@ -49,15 +55,10 @@
 
 
     <div class="halfwidth">
-        <h2> Preferences </h2>
+    <div>
+           <h2> Preferences </h2>
         <button class='toggle'>Hide</button>
         <div class='hideable'>
-            <p>
-                <b>Warning:</b> Unless the "no airspace" option is selected below, outlines of controlled airspace will be
-                displayed on the map provided we have data for the area.</p>
-            <p>This information may not be accurate, current or complete and is not valid for navigation or flight planning.
-                Always consult the official publications for current and correct information.
-            </p>
             <p>
                 <label for="altitudeUnits">Altitude units:</label>
                 <select id="altitudeUnits" class="inbutton">
@@ -82,14 +83,16 @@
             </p>
         </div>
     </div>
-    <div class="halfwidth" id="declaration">
-        <h2>Task- user entry </h2>
+        <h2>Select Task Source</h2>
         <button class='toggle'>Hide</button>
         <div>
-            <p>Fill in this section if the task declaration in the IGC file is absent or incorrect. It will override any declaration
-                in the file. To use the declaration in the IGC file leave it blank.</p>
+        <p><span class='nowrap'><label for='infile'>IGC File</label><input type='radio' name='tasksource'  value='infile' id='inflie'/></span>
+        <span class='nowrap'><label for='user'>User entry</label><input type='radio' name='tasksource'  value='user' id='user'/></span>
+        <span class='nowrap'><label for='xcplan'>XCWebPlan</label><input type='radio' name='tasksource'  value='xcplan' id='xcplan'/></span>
+        <span class='nowrap'><label for='nix'>None</label><input type='radio' name='tasksource'  value='nix' id='nix'/> </span></p>
+        <div id='taskentry'>
             <p>You may enter <a href="http://www.spsys.demon.co.uk/turningpoints.htm" target="_blank">BGA trigraphs</a>, six
-                character codes for waypoints on the <a href="http://www.segelflug.de/vereine/welt2000/" target="_blank"> Welt2000 database</a>                or Lat/Long in either 'dd:mm.mmm&nbsp;N&nbsp;ddd:mm.mmm&nbsp;W' or 'dd:mm:ss&nbsp;N&nbsp;ddd:mm:ss&nbsp;W'
+                character codes for waypoints on the <a href="http://www.segelflug.de/vereine/welt2000/" target="_blank"> Welt2000 database</a>  or Lat/Long in either 'dd:mm.mmm&nbsp;N&nbsp;ddd:mm.mmm&nbsp;W' or 'dd:mm:ss&nbsp;N&nbsp;ddd:mm:ss&nbsp;W'
                 format. Start and finish must be filled in, blank turning points will be ignored.</p>
             <p id="requestdata">
                 <span class="nowrap">Start: <input type="text" id="start"/>&nbsp;</span>
@@ -102,7 +105,7 @@
                 <button id="enterTask" class="inbutton">Enter</button>
                 <button id="clearTask" class="inbutton">Clear</button>
             </p>
-
+        </div>
         </div>
 
         <div id="task">
@@ -117,8 +120,8 @@
             </div>
         </div>
     </div>
-
-    <div id="flightInfo">
+    
+    <div id="flightInfo" class="halfwidth">
         <h2> Flight Information </h2>
         <button class='toggle'>Hide</button>
         <div>
@@ -178,6 +181,7 @@
     <p>Save configuration:  <input id="savesectors" type="checkbox"></p>
     <button class="closewindow">Cancel</button>
       <button id="setsectors">Apply</button>
+      </div>
 </body>
 
 </html>
