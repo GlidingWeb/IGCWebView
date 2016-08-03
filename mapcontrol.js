@@ -1,293 +1,293 @@
-// Wrapper for the leaflet.js map control with methods
-// to manage the map layers.
-function createMapControl(elementName) {
-  'use strict';
+var mapControl;
+function initMap() {
+ mapControl = createMapControl();
+}
 
-  // Private methods for drawing turn point sectors and start / finish lines
-
-  function getBearing(pt1, pt2) {
-    // Get bearing from pt1 to pt2 in degrees
-    // Formula from: http://www.movable-type.co.uk/scripts/latlong.html
-    // Start by converting to radians.
-    var degToRad = Math.PI / 180.0;
-    var lat1 = pt1['lat'] * degToRad;
-    var lon1 = pt1['lng'] * degToRad;
-    var lat2 = pt2['lat'] * degToRad;
-    var lon2 = pt2['lng'] * degToRad;
-
-    var y = Math.sin(lon2 - lon1) * Math.cos(lat2);
-    var x = Math.cos(lat1) * Math.sin(lat2) -
-      Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
-
-    var bearing = Math.atan2(y, x) / degToRad;
-    bearing = (bearing + 360.0) % 360.0;
-    return bearing;
-  }
-
-  function getLine(pt1, pt2, linerad, drawOptions) {
-    //returns line through pt1, at right angles to line between pt1 and pt2, length linerad.
-    //Use Pythogoras- accurate enough on this scale
-    var latdiff = pt2['lat'] - pt1['lat'];
-    var northmean = (pt1['lat'] + pt2['lat']) * Math.PI / 360;
-    var startrads = pt1['lat'] * Math.PI / 180;
-    var longdiff = (pt1['lng'] - pt2['lng']) * Math.cos(northmean);
-    var hypotenuse = Math.sqrt(latdiff * latdiff + longdiff * longdiff);
-    //assume earth is a sphere circumference 40030 Km 
-    var latdelta = linerad * longdiff / hypotenuse / 111.1949269;
-    var longdelta = linerad * latdiff / hypotenuse / 111.1949269 / Math.cos(startrads);
-    var linestart = L.latLng(pt1['lat'] - latdelta, pt1['lng'] - longdelta);
-    var lineend = L.latLng(pt1['lat'] + latdelta, longdelta + pt1['lng']);
-    var polylinePoints = [linestart, lineend];
-    return L.polyline(polylinePoints, drawOptions);
-  }
-
-  function getTpSector(centrept, pt1, pt2, sectorRadius, sectorAngle, drawOptions) {
-    var headingIn = getBearing(pt1, centrept);
-    var bearingOut = getBearing(pt2, centrept);
-    var bisector = headingIn + (bearingOut - headingIn) / 2;
-
-    if (Math.abs(bearingOut - headingIn) > 180) {
-      bisector = (bisector + 180) % 360;
-    }
-
-    var beginangle = bisector - sectorAngle / 2;
-
-    if (beginangle < 0) {
-      beginangle += 360;
-    }
-
-    var endangle = (bisector + sectorAngle / 2) % 360;
-    var sectorOptions = jQuery.extend({}, drawOptions, {
-      startAngle: beginangle,
-      stopAngle: endangle
-    });
-    return L.circle(centrept, sectorRadius, sectorOptions);
-  }
-
-  function zapAirspace() {
-    if (mapLayers.airspace) {
-      map.removeLayer(mapLayers.airspace);
-    }
-  }
-
-  function showAirspace() {
-    var i;
-    var polyPoints;
-    var airStyle = {
-      "color": "black",
-      "weight": 1,
-      "opacity": 0.20,
-      "fillColor": "red",
-      "smoothFactor": 1
+function createMapControl() { 
+   var taskfeatures = [];
+   var sectorfeatures=[];
+   var trackline;
+   var airspacePolygons=[];
+  var polygonBases = [];
+   var airspaceCircles=[];
+    var circleBases = [];
+    var engineLines=[];
+   
+   var gliderMarker = new google.maps.Marker({
+    icon: 'glidericon.png'
+  });
+   
+var myStyles =[ 
+     {
+         "featureType": "poi", 
+         "elementType": "labels", 
+         "stylers": [
+         { "visibility": "off" } 
+        ] 
+    },
+         { 
+         "featureType": "transit", 
+         "elementType": "labels", 
+          "stylers": [
+          { "visibility": "off" }
+        ] } ];
+     
+    var mapOpt = {
+      center: new google.maps.LatLng(0, 0),
+      zoom: 2,
+      mapTypeId: google.maps.MapTypeId.TERRAIN,
+      streetViewControl: false,
+      styles: myStyles
     };
-    var suafeatures = [];
-    zapAirspace();
-    if ((airClip > 0) && (map.getZoom() > 6)) {
-      for (i = 0; i < airspace.polygons.length; i++) {
-        if (airspace.polygons[i].base < airClip) {
-          polyPoints = airspace.polygons[i].coords;
-          suafeatures.push(L.polygon(polyPoints, airStyle));
-        }
-      }
-      for (i = 0; i < airspace.circles.length; i++) {
-        if (airspace.circles[i].base < airClip) {
-          suafeatures.push(L.circle(airspace.circles[i].centre, 1000 * airspace.circles[i].radius, airStyle));
-        }
-      }
-      mapLayers.airspace = L.layerGroup(suafeatures).addTo(map);
-    }
-  }
-
-  // End of private methods
-
-  var map = L.map(elementName);
-
-  //Airspace clip altitude and initial bounds now a property of this object
-  var airClip = 0;
-  var pin;
-  var initBounds;
-  var airspace = {};
-
-  var cartoAttribution = '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://cartodb.com/attributions">CartoDB</a>';
-  var mapLayers = {
-    positron: L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png', {
-      attribution: cartoAttribution,
-      maxZoom: 18
-    }),
-
-    darkMatter: L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', {
-      attribution: cartoAttribution,
-      maxZoom: 18
-    }),
-
-    toner: L.tileLayer('https://stamen-tiles-{s}.a.ssl.fastly.net/toner/{z}/{x}/{y}.png', {
-      attribution: 'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.',
-      maxZoom: 18
-    }),
-
-    watercolor: L.tileLayer('https://stamen-tiles-{s}.a.ssl.fastly.net/watercolor/{z}/{x}/{y}.png', {
-      attribution: 'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://creativecommons.org/licenses/by-sa/3.0">CC BY SA</a>.',
-      maxZoom: 18
-    })
+    
+    var pinicon = {
+    url: 'pin.png',
+    anchor: new google.maps.Point(0, 53)
   };
 
-  var layersControl = L.control.layers({
-    'Carto Positron': mapLayers.positron,
-    'Carto Dark Matter': mapLayers.darkMatter,
-    'Stamen Toner': mapLayers.toner,
-    'Stamen Watercolor': mapLayers.watercolor
+  var pin = new google.maps.Marker({
+    icon: pinicon
   });
+  
+   function zapAirspace() {
+    var i;
+    var j;
 
-  mapLayers.positron.addTo(map);
-  layersControl.addTo(map);
-  var trackLatLong = [];
-  var timePositionMarker;
-  L.AwesomeMarkers.Icon.prototype.options.prefix = 'fa';
-  var planeIcon = L.AwesomeMarkers.icon({
-    icon: 'plane',
-    iconColor: 'white',
-    markerColor: 'red'
+    for (i = 0; i < airspacePolygons.length; i++) {
+      airspacePolygons[i].setMap(null);
+      airspacePolygons[i] = null;
+    }
+    airspacePolygons.length = 0;
+    polygonBases.length = 0;
+    for (j = 0; j < airspaceCircles.length; j++) {
+      airspaceCircles[j].setMap(null);
+      airspaceCircles[j] = null;
+    }
+    airspaceCircles.length = 0;
+    circleBases.length = 0;
+  }  
+    
+function getLineBounds(line) {
+  var bounds = new google.maps.LatLngBounds();
+  line.getPath().forEach(function(latLng) {
+    bounds.extend(latLng);
   });
-  return {
-    reset: function() {
-      // Clear any existing track data so that a new file can be loaded.
-      if (mapLayers.track) {
-        map.removeLayer(mapLayers.track);
-        layersControl.removeLayer(mapLayers.track);
-      }
-
-      if (mapLayers.task) {
-        map.removeLayer(mapLayers.task);
-        layersControl.removeLayer(mapLayers.task);
-      }
-      if (pin) {
-        map.removeLayer(pin);
-      }
-    },
-
-    setAirspace: function(suadata) {
-      airspace = suadata;
-      showAirspace();
-    },
-
-    addTrack: function(latLong) {
-      trackLatLong = latLong;
-      var trackLine = L.polyline(latLong, {
-        color: 'blue',
-        weight: 4
+  return bounds;
+}
+    
+function getTargetLine(start, end) {
+      var targetLine = new google.maps.Polyline({
+        path: [start, end],
+        strokeColor: 'black',
+        strokeOpacity: 1.0,
+        strokeWeight: 2
       });
-      timePositionMarker = L.marker(latLong[0], {
-        icon: planeIcon
-      });
-      mapLayers.track = L.layerGroup([
-        trackLine,
-        timePositionMarker
-      ]).addTo(map);
-      layersControl.addOverlay(mapLayers.track, 'Flight path');
-      initBounds = (trackLine.getBounds());
-      map.fitBounds(initBounds);
-    },
-
-    zoomToTrack: function() {
-      map.fitBounds(initBounds);
-    },
-
-    zapTask: function() {
-      if (mapLayers.task) {
-        map.removeLayer(mapLayers.task);
-        layersControl.removeLayer(mapLayers.task);
-      }
-      if (pin) {
-        map.removeLayer(pin);
-      }
-    },
-
-    addTask: function(coordinates, names, sectordefs) {
-      var taskLayers = [L.polyline(coordinates, {
-        color: 'dimgray'
-      })];
-      var lineDrawOptions = {
-        fillColor: 'green',
-        color: 'black',
-        weight: 2,
-        opacity: 0.8
-      };
-      var sectorDrawOptions = {
+  return targetLine;
+    }
+    
+    function getCircle(centre,radius) {
+        var tpCircle = new google.maps.Circle({
+        strokeColor: 'black',
+        strokeOpacity: 0.8,
+        strokeWeight: 1,
         fillColor: 'green',
         fillOpacity: 0.1,
-        color: 'black',
-        weight: 1,
-        opacity: 0.8
-      };
-      var j;
-      for (j = 0; j < coordinates.length; j++) {
-        taskLayers.push(L.marker(coordinates[j]).bindPopup(names[j]));
-        switch (j) {
-          case 0:
-            var startline = getLine(coordinates[0], coordinates[1], sectordefs.startrad, lineDrawOptions);
-            taskLayers.push(startline);
-            break;
-          case (coordinates.length - 1):
-            if (sectordefs.finishtype === "line") {
-              var finishline = getLine(coordinates[j], coordinates[j - 1], sectordefs.finrad, lineDrawOptions);
-              taskLayers.push(finishline);
-            }
-            else {
-              taskLayers.push(L.circle(coordinates[j], sectordefs.finrad * 1000, sectorDrawOptions));
-            }
-            break;
-          default:
-            if (sectordefs.use_barrel) {
-              taskLayers.push(L.circle(coordinates[j], sectordefs.tprad * 1000, sectorDrawOptions));
-            }
-            if (sectordefs.use_sector) {
-              var tpsector = getTpSector(coordinates[j], coordinates[j - 1], coordinates[j + 1], sectordefs.sector_rad * 1000, sectordefs.sector_angle, sectorDrawOptions);
-              taskLayers.push(tpsector);
-            }
-        }
-      }
-      mapLayers.task = L.layerGroup(taskLayers).addTo(map);
-      layersControl.addOverlay(mapLayers.task, 'Task');
-    },
-
-    updateAirspace: function(clip) {
-      airClip = clip;
-      showAirspace();
-    },
-
-    setClipAlt: function(clip) {
-      airClip = clip;
-    },
-
-    showTP: function(tpoint) {
-      map.setView(tpoint, 13);
-    },
-
-    pushPin: function(coords) {
-
-      var pinIcon = L.icon({
-        iconUrl: 'pin.png',
-        iconSize: [33, 53], // size of the icon
-        iconAnchor: [0, 50], // point of the icon which will correspond to marker's location
-        popupAnchor: [-3, -76] // point from which the popup should open relative to the iconAnchor
+        center: centre,
+        radius: radius * 1000
       });
-      if (pin) {
-        map.removeLayer(pin);
+        return tpCircle;
+    }
+
+    function getPolygon(coordlist) {
+         var sectorPoly = new google.maps.Polygon({
+        paths: coordlist,
+        strokeColor: 'black',
+        strokeOpacity: 0.8,
+        strokeWeight: 1,
+        fillColor: 'green',
+        fillOpacity: 0.1
+      });
+         return sectorPoly;
+    }
+    
+     function zapSectors() {
+        var i;
+        for(i=0;i < sectorfeatures.length; i++) {
+           sectorfeatures[i].setMap(null);
+        }
+        sectorfeatures=[];
+    }
+    
+    function zapTask() {
+        var i;
+        zapSectors();
+        for(i=0;i < taskfeatures.length; i++) {
+            taskfeatures[i].setMap(null);
+        }
+        taskfeatures=[];
+    }
+    
+     function deleteEnl () {
+      var i;
+      for(i=0;i < engineLines.length;i++) {
+          engineLines[i].setMap(null);
       }
-      pin = L.marker(L.latLng(coords), {
-        icon: pinIcon
-      }).addTo(map);
+      engineLines=[];
+  }
+  
+  map = new google.maps.Map($('#map').get(0), mapOpt);
+  
+return {
+  addTask: function(task) {
+      var j;
+      var route = new google.maps.Polyline({
+        path: task.coords,
+        strokeColor: 'dimgray',
+        strokeOpacity: 1.0,
+        strokeWeight: 3
+      });
+      route.setMap(map);
+      taskfeatures.push(route);
+      for (j = 0; j < task.coords.length - 1; j++) {
+        var taskmarker = new google.maps.Marker({
+          position: task.coords[j],
+          map: map,
+          title: task.labels[j]
+        });
+        taskfeatures.push(taskmarker);
+      }
+      var taskbounds=getLineBounds(route);
+      map.fitBounds(taskbounds);
     },
+    
+    drawSectors: function(sectorList) {
+        var i;
+        var feature;
+        zapSectors();
+        for(i=0;i< sectorList.length;i++) {
+            switch(sectorList[i].type) {
+                case "line":
+                 feature=getTargetLine(sectorList[i].start,sectorList[i].end);
+                  break;
+                case "circle":
+                     feature=getCircle(sectorList[i].centre,sectorList[i].radius);
+                    break;
+                case "segment":
+                    feature=getPolygon(sectorList[i].outline);
+                    break;
+            }
+           feature.setMap(map);
+           sectorfeatures.push(feature);
+        }
+    },
+    
+    clearTask: function() {
+        zapTask();
+    },
+    
+    setBounds: function(bounds) {
+        map.fitBounds(bounds);
+    },
+    
+  showTP:  function(tpoint) {
+   map.panTo(tpoint);
+    map.setZoom(13);
+    },
+    
+addTrack:  function(coords) {
+    pin.setMap(null);
+     if (trackline) {
+        trackline.setMap(null);
+      }
+      trackline = new google.maps.Polyline({
+        path: coords,
+        strokeColor: 'blue',
+        strokeOpacity: 1.0,
+        clickable: false,
+        strokeWeight: 4
+      });
+      trackline.setMap(map);
+      gliderMarker.setPosition(coords[0]);
+      gliderMarker.setMap(map);
+},
 
-    setTimeMarker: function(timeIndex) {
-      var markerLatLng = trackLatLong[timeIndex];
-      if (markerLatLng) {
-        timePositionMarker.setLatLng(markerLatLng);
-
-        if (!map.getBounds().contains(markerLatLng)) {
-          map.panTo(markerLatLng);
+ updateAirspace: function(clipalt) {
+      var i;
+      var j;
+      for (i = 0; i < airspacePolygons.length; i++) {
+        if (polygonBases[i] < clipalt) {
+          airspacePolygons[i].setMap(map);
+        } else {
+          airspacePolygons[i].setMap(null);
         }
       }
+      for (j = 0; j < airspaceCircles.length; j++) {
+        if (circleBases[j] < clipalt) {
+          airspaceCircles[j].setMap(map);
+        } else {
+          airspaceCircles[j].setMap(null);
+        }
+      }
+    },
+
+setAirspace: function(airdata) {
+      var i;
+      var j;
+      zapAirspace();
+      var airDrawOptions = {
+        strokeColor: 'black',
+        strokeOpacity: 0.8,
+        strokeWeight: 1,
+        fillColor: '#FF0000',
+        fillOpacity: 0.2,
+        clickable: false
+      };
+      for (i = 0; i < airdata.polygons.length; i++) {
+        airspacePolygons[i] = new google.maps.Polygon(airDrawOptions);
+        airspacePolygons[i].setPaths(airdata.polygons[i].coords);
+        polygonBases[i] = airdata.polygons[i].base;
+      }
+      for (j = 0; j < airdata.circles.length; j++) {
+        airspaceCircles[j] = new google.maps.Circle(airDrawOptions);
+        airspaceCircles[j].setRadius(1000 * airdata.circles[j].radius);
+        airspaceCircles[j].setCenter(airdata.circles[j].centre);
+        circleBases[j] = airdata.circles[j].base;
+      }
+    },
+
+  zapEngineRuns: function() {
+        deleteEnl();
+    },   
+    
+showEngineRuns: function(runList) {
+    var i;
+     var lineOpt={
+         strokeColor: 'yellow',
+        strokeOpacity: 1.0,
+        clickable: false,
+        zIndex: google.maps.Marker.MAX_ZINDEX +1,
+        strokeWeight: 4
+     };
+        deleteEnl();
+    for(i=0;i < runList.length; i++) {
+        engineLines[i]= new google.maps.Polyline(lineOpt);
+       engineLines[i].setPath(runList[i]);
+       engineLines[i].setMap(map);
     }
-  };
+},
+    
+setTimeMarker:  function(position) {
+      gliderMarker.setPosition(position);
+     var gliderpos = new google.maps.LatLng(position);
+      if (!(map.getBounds().contains(gliderpos))) {
+       map.panTo(gliderpos);
+      }
+},
+ pushPin: function(coords) {
+      pin.setPosition(coords);
+      pin.setMap(map);
+    }
+};
 }
+
+
