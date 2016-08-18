@@ -1,10 +1,10 @@
+
 var ns = (function ($) {
   'use strict';
   var sectordefs = {};
   var enlStatus = {};
   var altRef;
   var altSource;
-  var mapControl;
   var task = null;
   var igcFile = null;
   var planWindow;
@@ -566,7 +566,7 @@ var ns = (function ($) {
   }
 
   function getFromPlanner(version) {
-    var planUrl = "../TaskMap/xcplan.php?version=" + version;
+    var planUrl = "../xcwebplan/xcplan.php?version=" + version;
     if ((!(planWindow)) || (planWindow.closed)) {
       planWindow = window.open(planUrl, "_blank");
     }
@@ -836,6 +836,7 @@ var ns = (function ($) {
       );
     }
     $('#flightInfo').show();
+    $('#map').css('visibility', 'visible');
     mapControl.addTrack(igcFile.latLong);
     $('#flightinfo').show();
     $('#timeSlider').prop('max', igcFile.recordTime.length - 1);
@@ -858,7 +859,6 @@ var ns = (function ($) {
   }
 
   $(document).ready(function () {
-      mapControl = createMapControl();
       applyUnits();
       setSectorDefaults();
       setEnlDefaults();
@@ -1097,6 +1097,7 @@ var ns = (function ($) {
           }
         });
     });
+  
   return {
     importTask: function (taskinfo) {
       task = maketask(taskinfo);

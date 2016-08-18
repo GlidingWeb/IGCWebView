@@ -1,3 +1,8 @@
+var mapControl;
+function initMap() {
+ mapControl = createMapControl();
+}
+
 function createMapControl() { 
    var taskfeatures = [];
    var sectorfeatures=[];
