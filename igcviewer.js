@@ -19,6 +19,7 @@ var ns = (function ($) {
     offset: 0,
     dst: false
   };
+var semaphore;
 
   function showval(converter, value) {
     var conValue = converter.multiplier * value;
@@ -29,7 +30,6 @@ var ns = (function ($) {
     var baseAlt;
     var offset;
     var i = -1;
-
     if (altRef === 'std') {
       offset = 0;
     } else {
@@ -44,7 +44,14 @@ var ns = (function ($) {
       }
       offset = -baseAlt;
       if (altRef === 'QNH') {
-        offset = startElevation - baseAlt;
+        if(startElevation) {
+               offset = startElevation - baseAlt;
+        }
+        else {
+            alert("Start altitude not available, using QFE");
+            altRef='QFE';
+            offset=-baseAlt;
+        }
       }
     }
     return offset;
@@ -446,6 +453,10 @@ var ns = (function ($) {
     $("input[name='altsource']").val([altSource]);
   }
 
+  function setAltDefaults() {
+      altRef='std';
+  }
+  
   function setAltRefs() {
     altRef = $("input[name='alttype']").filter(':checked').val();
     altSource = $("input[name='altsource']").filter(':checked').val();
@@ -473,7 +484,7 @@ var ns = (function ($) {
       var taskdata = {
         coords: [],
         name: []
-      };
+      };;
       for (i = 1; i < igcFile.taskpoints.length - 1; i++) {
         pointdata = getPoint(igcFile.taskpoints[i]);
         if (pointdata.message === "OK") {
@@ -573,21 +584,77 @@ var ns = (function ($) {
     planWindow.focus();
   }
 
-  function gettimezone() {
-    var flightdate = igcFile.flightDate;
-    return $.ajax({
+function timezoneDefault() {
+    alert("Time zone detection failed- using UTC");
+    timezone.zoneabbr = "UTC";
+    timezone.offset = 0;
+     timezone.zonename = "UTC";
+}
+
+ function gettimezone() {
+  $.ajax({
       url: "gettimezone.php",
       data: {
-        stamp: flightdate,
+        stamp: igcFile.flightDate,
+        lat: igcFile.latLong[0].lat,
+        lon: igcFile.latLong[0].lng
+      },
+      timeout: 3000,
+      method: "POST",
+      dataType: "json"      
+    }) 
+   .done(function(data,status) {
+    if(status==='success') {
+        timezone.zoneabbr = data.timeZoneName.match(/[A-Z]/g).join('');
+       timezone.offset =data.rawOffset + parseFloat(data.dstOffset);
+      timezone.zonename = data.timeZoneName;
+    }
+    else {
+        timezoneDefault();
+    }
+  })
+   .fail(function() {
+  timezoneDefault();
+  })
+  .always(function() {
+    semaphore--;
+    if(semaphore===0) {
+        fillIn();
+    }
+  });
+  }
+
+  function getBaseElevation() {
+       $.ajax({
+      url: "getelevation.php",
+      data: {
         lat: igcFile.latLong[0].lat,
         lon: igcFile.latLong[0].lng
       },
       timeout: 3000,
       method: "POST",
       dataType: "json"
-    });
+    })
+    .done(function(data,status) {
+         if (status === 'success') {
+          startElevation = data.results[0].elevation;
+        } 
+        else {
+          startElevation = null;
+        }
+  })
+   .fail(function() {
+       startElevation = null;
+       console.log("Fail");
+  })
+  .always(function() {
+    semaphore--;
+    if(semaphore===0) {
+       fillIn();
+    }
+  });
   }
-
+  
   function getElevation(index) {
     return $.ajax({
       url: "getelevation.php",
@@ -668,6 +735,15 @@ var ns = (function ($) {
           $('#heightAGL').text("Height above ground: " + showval(altUnits, gliderAlt - groundElevation));
         }
       });
+    $('#flightdetail1').html("");
+    if(timeIndex < igcFile.takeOffIndex) {
+        $('#flightMode').text("Flight mode: Pre takeoff");
+    }
+    else {
+         if(timeIndex >  igcFile.landingIndex) {
+            $('#flightMode').text("Flight mode: Landed");
+         }
+    else {         
     var startPos = timeIndex - Math.ceil(30 / igcFile.timeInterval); //30 second spread of data
     //get average turn rate over ~last 30 secs
     var cuSum = 0;
@@ -735,7 +811,9 @@ var ns = (function ($) {
       }
     }
   }
-
+    }
+  }
+  
   function loadAirspace(margin) {
     $.post("getairspace.php", {
         bounds: JSON.stringify(igcFile.bounds),
@@ -799,34 +877,24 @@ var ns = (function ($) {
     $('#taskcalcs').append("<br/><br/>Flight time: " + Math.floor(flightSeconds / 3600) + "hrs " + pad(Math.round(flightSeconds / 60) % 60) + "mins");
   }
 
+  function fillIn() {
+      altOffset = getAltOffset();
+        var localtime = igcFile.flightDate + timezone.offset;
+        $('#datecell').text(displayDate(localtime));
+        barogramPlot = plotBarogram(igcFile);
+       updateTimeline(0);
+  }
+  
+  
   function displayIgc() {
     if ((altSource === "baro") && !(igcFile.hasPressure)) {
       alert("Pressure altitude not available.\nUsing GPS");
       altSource = "gps";
     }
-    //Call this first as process is asynchronous- can run while the map is being drawn
-    $.when(gettimezone(), getElevation(0)).done(function (tzargs, elargs) {
-        if (tzargs[0].status === 'OK') {
-          timezone.zoneabbr = tzargs[0].timeZoneName.match(/[A-Z]/g).join('');
-          timezone.offset = parseFloat(tzargs[0].rawOffset) + parseFloat(tzargs[0].dstOffset);
-          timezone.zonename = tzargs[0].timeZoneName;
-        } else {
-          timezone.zoneabbr = "UTC";
-          timezone.offset = 0;
-          timezone.zonename = "UTC";
-        }
-        if (elargs[0].status === 'OK') {
-          startElevation = elargs[0].results[0].elevation;
-        } else {
-          startElevation = null;
-        }
-        altOffset = getAltOffset();
-        var localtime = igcFile.flightDate + timezone.offset;
-        $('#datecell').text(displayDate(localtime));
-        barogramPlot = plotBarogram(igcFile);
-        updateTimeline(0);
-      });
-    // Display the headers.
+semaphore=2;
+gettimezone();
+getBaseElevation();
+ // Display the headers.
     var headerBlock = $('#headers');
     headerBlock.html('');
     var headerIndex;
@@ -840,18 +908,17 @@ var ns = (function ($) {
     mapControl.addTrack(igcFile.latLong);
     $('#flightinfo').show();
     $('#timeSlider').prop('max', igcFile.recordTime.length - 1);
-    if ((igcFile.taskpoints.length > 4) && ($('input[type=radio][name=tasksource]').filter(':checked').val() === "infile")) {
-      $('#task').hide();
+     if  ($('input[type=radio][name=tasksource]').filter(':checked').val() === "infile") {
+     $('#task').hide();
       clearTask();
       task = getFileTask();
       if (task) {
         showTask();
       }
-    }
+     }
     mapControl.setBounds(igcFile.bounds);
     if (enlStatus.detect === 'On') {
       engineRuns = getEngineState(igcFile, enlStatus);
-      //alert(JSON.stringify(engineRuns.engineTrack));
       mapControl.showEngineRuns(engineRuns.engineTrack);
     }
     loadAirspace(20); //Show airspace in track bounding rectangle + 20 Km margin
@@ -1037,6 +1104,7 @@ var ns = (function ($) {
             updateTimeline(item.dataIndex);
             showPositionDetail(item.dataIndex);
             $('#timeSlider').val(item.dataIndex);
+            $('#timeSlider').focus();
           }
         });
 
@@ -1062,6 +1130,7 @@ var ns = (function ($) {
 
       $('.closewindow').click(function () {
           $(this).parent().hide();
+          $('#timeSlider').focus();
         });
 
       $('#moreData').click(function () {
