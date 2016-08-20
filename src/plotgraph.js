@@ -17,14 +17,19 @@ module.exports =  {
     var prefs=require('./preferences');
     var multiplier;
     
-    if(prefs.altitude.units==='ft') {
+    
+    if(prefs.units.altitude==='ft') {
         multiplier=prefs.metre2foot;
         yaxisLabel= "Altitude (feet)";
     }
-    if(prefs.altitude.source==='P') {
+    else {
+         yaxisLabel= "Altitude (metres)";
+         multiplier=1;
+    }
+    if(prefs.altRefs.source==='P') {
         altitudeLabel="Pressure Altitude";
      plotColour = '#FF0000';
-       switch (prefs.altitude.reference) {
+       switch (prefs.altRefs.reference) {
       case "QFE":
         altitudeLabel += " (QFE takeoff)";
         altOffset= -flight.pressureAltitude[0];

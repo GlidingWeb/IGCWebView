@@ -12,6 +12,14 @@ var airspace= {
     circle_bases: []
 };
 
+function getLineBounds(line) {
+  var bounds = new google.maps.LatLngBounds();
+  line.getPath().forEach(function(latLng) {
+    bounds.extend(latLng);
+  });
+  return bounds;
+}
+
  function zapAirspace() {
     var i;
     var j;
@@ -228,14 +236,15 @@ setAirspace:  function(airdata) {
     
     zapTask: function() {
         var i;
-        //zapSectors();
+        zapSectors();
         for(i=0;i < taskfeatures.length; i++) {
             taskfeatures[i].setMap(null);
         }
         taskfeatures=[];
     },
+
     
-    addTask: function(tplist) {
+    addTask: function(tplist,zoomto) {
       var j;
       this.zapTask();
       var route = new google.maps.Polyline({
@@ -257,6 +266,10 @@ setAirspace:  function(airdata) {
         });
         taskfeatures.push(taskmarker);
     }
+    if(zoomto) {
+    var taskbounds=getLineBounds(route);
+    mapObj.fitBounds(taskbounds);
+    }
     this.addSectors(tplist);
 },
 
@@ -269,7 +282,7 @@ setAirspace:  function(airdata) {
       gliderMarker.setPosition(position);
      var gliderpos = new google.maps.LatLng(position);
       if (!(mapObj.getBounds().contains(gliderpos))) {
-       map.panTo(gliderpos);
+       mapObj.panTo(gliderpos);
       }
 } 
 }

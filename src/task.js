@@ -10,21 +10,24 @@ var descriptions= [];
 var legsize= [];
 var bearing= [];
 
-function clearTask() {
+
+module.exports={
+ 
+clearTask: function() {
 tasklength = 0;
-names .length=0;
+names.length=0;
 labels.length = 0;
 coords.length =0;
 descriptions.length = 0;
 legsize.length =0;
 bearing.length = 0;
-}
-
-module.exports={
+},   
+    
 createTask: function(points){
 var i;
  var j = 1;
-clearTask();
+this.clearTask();
+tasklength=0;
 names[0] = points.names[0];
 labels[0] = "Start";
 coords[0] = points.coords[0];
@@ -47,9 +50,11 @@ bearing[0] = 0;
   }
   labels[labels.length - 1] = "Finish";
 },
+
 getTaskLength: function() {
     return tasklength;
 },
+
 names:  names,
 labels:  labels,
 coords: coords,

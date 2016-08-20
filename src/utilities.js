@@ -139,6 +139,99 @@ targetPoint: function(start, distance, bearing) {
     lat: retlat,
     lng: retlng
   };
+},
+//Parses a text input.  Matches to BGA list, Welt2000 list, or lat/long input  Retrieves coordinates and name
+getPoint: function(instr) {
+  var latitude;
+  var longitude;
+  var pointname = "Not named";
+  var matchref;
+  var statusmessage = "Fail";
+  var count;
+  var coords = {};
+  var pointregex = [
+    /^([A-Za-z]{2}[A-Za-z0-9]{1})$/,
+    /^([A-Za-z0-9]{6})$/,
+    /^([\d]{2})([\d]{2})([\d]{3})([NnSs])([\d]{3})([\d]{2})([\d]{3})([EeWw])(.*)$/,
+    /^([0-9]{1,2}):([0-9]{1,2}):([0-9]{1,2})[\s]*([NnSs])[\W]*([0-9]{1,3}):([0-9]{1,2}):([0-9]{1,2})[\s]*([EeWw])$/,
+    /^(\d{1,2})[\s:](\d{1,2})\.(\d{1,3})\s*([NnSs])\s*(\d{1,3})[\s:](\d{1,2})\.(\d{1,3})\s*([EeWw])$/
+  ];
+  for(count = 0; count < pointregex.length; count++) {
+    matchref = instr.match(pointregex[count]);
+    if(matchref) {
+      switch(count) {
+      case 0:
+      case 1:
+        //BGA or Welt2000 point
+        $.ajax({
+          url: "findtp.php",
+          data: {
+            postdata: matchref[0]
+          },
+          timeout: 3000,
+          method: "POST",
+          dataType: "json",
+          async: false, //must be synchronous as order in which points are returned is important
+          success: function (data) {
+            pointname = data.tpname;
+            if(pointname !== "Not found") {
+              latitude = data.latitude;
+              longitude = data.longitude;
+              statusmessage = "OK";
+            }
+          }
+        });
+        break;
+      case 2:
+        //format in IGC file
+        latitude = parseFloat(matchref[1]) + parseFloat(matchref[2]) / 60 + parseFloat(matchref[3]) / 60000;
+        if(matchref[4].toUpperCase() === "S") {
+          latitude = -latitude;
+        }
+        longitude = parseFloat(matchref[5]) + parseFloat(matchref[6]) / 60 + parseFloat(matchref[7]) / 60000;
+        if(matchref[8].toUpperCase() === "W") {
+          longitude = -longitude;
+        }
+        if(matchref[9].length > 0) {
+          pointname = matchref[9];
+        }
+        if((latitude !== 0) && (longitude !== 0)) {
+          statusmessage = "OK";
+        }
+        break;
+      case 3:
+        //hh:mm:ss
+        latitude = parseFloat(matchref[1]) + parseFloat(matchref[2]) / 60 + parseFloat(matchref[3]) / 3600;
+        if(matchref[4].toUpperCase() === "S") {
+          latitude = -latitude;
+        }
+        longitude = parseFloat(matchref[5]) + parseFloat(matchref[6]) / 60 + parseFloat(matchref[7]) / 3600;
+        if(matchref[8].toUpperCase() === "W") {
+          longitude = -longitude;
+        }
+        break;
+      case 4:
+        latitude = parseFloat(matchref[1]) + parseFloat(matchref[2]) / 60 + parseFloat(matchref[3]) / (60 * (Math.pow(10, matchref[3].length)));
+        if(matchref[4].toUpperCase() === "S") {
+          latitude = -latitude;
+        }
+        longitude = parseFloat(matchref[5]) + parseFloat(matchref[6]) / 60 + parseFloat(matchref[7]) / (60 * (Math.pow(10, matchref[7].length)));
+        if(matchref[8].toUpperCase() === "W") {
+          longitude = -longitude;
+        }
+        statusmessage = "OK";
+        break;
+      }
+    }
+  }
+  coords.lat = latitude;
+  coords.lng = longitude;
+  return {
+    message: statusmessage,
+    coords: coords,
+    name: pointname
+  };
 }
+
 }
 
