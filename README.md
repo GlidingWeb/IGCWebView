@@ -16,8 +16,8 @@ work with on laptops.
 
 *IGC Web View* is an IGC viewer written in JavaScript and HTML 5, 
 which is able to run in any modern Web browser. It draws the 
-glider's flight path onto an interactive map, using 
-[OpenStreetMap](http://www.openstreetmap.org) data, and also plots a 
+glider's flight path onto an interactive map, using the 
+[Google Maps Javascript API](https://developers.google.com/maps/documentation/javascript/), and also plots a 
 graph of altitude against time. The responsive layout adjusts itself 
 to fit any screen size, from a large widescreen monitor to a small 
 laptop or even a smartphone.
